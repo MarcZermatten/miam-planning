@@ -8,6 +8,7 @@ import '../features/meal_plan/presentation/screens/home_screen.dart';
 import '../features/recipes/presentation/screens/recipes_screen.dart';
 import '../features/recipes/presentation/screens/recipe_detail_screen.dart';
 import '../features/recipes/presentation/screens/add_recipe_screen.dart';
+import '../features/recipes/presentation/screens/recipe_search_screen.dart';
 import '../features/meal_plan/presentation/screens/weekly_planner_screen.dart';
 import '../features/pantry/presentation/pantry_screen.dart';
 import '../features/shopping/presentation/shopping_list_screen.dart';
@@ -23,6 +24,7 @@ class AppRoutes {
   static const recipes = '/recipes';
   static const recipeDetail = '/recipes/:id';
   static const addRecipe = '/recipes/add';
+  static const searchRecipes = '/recipes/search';
   static const weeklyPlanner = '/planner';
   static const pantry = '/pantry';
   static const shopping = '/shopping';
@@ -77,6 +79,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AddRecipeScreen(),
       ),
       GoRoute(
+        path: AppRoutes.searchRecipes,
+        builder: (context, state) => const RecipeSearchScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.recipeDetail,
         builder: (context, state) {
           final id = state.pathParameters['id']!;
@@ -128,7 +134,7 @@ class MainShell extends StatelessWidget {
           NavigationDestination(
             icon: Icon(Icons.kitchen_outlined),
             selectedIcon: Icon(Icons.kitchen),
-            label: 'Garde-manger',
+            label: 'Frigo',
           ),
           NavigationDestination(
             icon: Icon(Icons.shopping_cart_outlined),

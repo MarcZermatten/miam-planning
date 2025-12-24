@@ -91,8 +91,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         context.go(AppRoutes.home);
       }
     } catch (e) {
+      debugPrint('Google Sign-In Error: $e');
       setState(() {
-        _errorMessage = 'Erreur de connexion Google. Reessayez.';
+        _errorMessage = 'Erreur Google: $e';
       });
     } finally {
       if (mounted) {
@@ -272,37 +273,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Divider
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'ou',
-                        style: TextStyle(color: AppColors.textSecondary),
+                // Google Sign In (only on supported platforms)
+                if (ref.watch(isGoogleSignInAvailableProvider)) ...[
+                  // Divider
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'ou',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
                       ),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 16),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-                // Google Sign In button
-                OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _signInWithGoogle,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  // Google Sign In button
+                  OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _signInWithGoogle,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: Image.network(
+                      'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                      height: 20,
+                      width: 20,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata, size: 24),
+                    ),
+                    label: const Text('Continuer avec Google'),
                   ),
-                  icon: Image.network(
-                    'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
-                    height: 20,
-                    width: 20,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata, size: 24),
-                  ),
-                  label: const Text('Continuer avec Google'),
-                ),
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
+                ] else
+                  const SizedBox(height: 24),
 
                 // Toggle sign in / sign up
                 Row(

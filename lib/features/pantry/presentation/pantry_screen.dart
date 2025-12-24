@@ -36,7 +36,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Garde-manger'),
+        title: const Text('Frigo'),
         bottom: TabBar(
           controller: _tabController,
           tabs: [
@@ -110,7 +110,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
           ),
           const SizedBox(height: 16),
           const Text(
-            'Garde-manger vide',
+            'Frigo vide',
             style: TextStyle(
               fontSize: 18,
               color: AppColors.textSecondary,
@@ -616,7 +616,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Vider le garde-manger?'),
+        title: const Text('Vider le frigo?'),
         content: const Text('Les ingredients de base seront conserves.'),
         actions: [
           TextButton(

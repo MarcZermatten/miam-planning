@@ -34,6 +34,11 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
         title: const Text('Recettes'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.travel_explore),
+            tooltip: 'Chercher sur le web',
+            onPressed: () => context.push(AppRoutes.searchRecipes),
+          ),
+          IconButton(
             icon: Icon(_showFilters ? Icons.filter_list_off : Icons.filter_list),
             onPressed: () => setState(() => _showFilters = !_showFilters),
           ),

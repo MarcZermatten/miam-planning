@@ -144,7 +144,7 @@ class HomeScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Suggestions du garde-manger',
+                    'Suggestions du frigo',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

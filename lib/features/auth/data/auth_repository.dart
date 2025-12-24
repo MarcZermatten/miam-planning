@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import '../../../core/config/google_auth_config.dart';
 
 /// Firebase Auth instance provider
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) {
@@ -67,46 +66,28 @@ class AuthRepository {
     await _auth.sendPasswordResetEmail(email: email);
   }
 
-  /// Sign in with Google
+  /// Check if Google Sign-In is available on current platform
+  bool get isGoogleSignInAvailable {
+    if (kIsWeb) return false; // TODO: implement web
+    // Only Android/iOS for now (Windows has issues with google_sign_in_dartio)
+    return Platform.isAndroid || Platform.isIOS;
+  }
+
+  /// Sign in with Google (Android/iOS only)
   Future<UserCredential?> signInWithGoogle() async {
-    // Configure GoogleSignIn based on platform
-    final GoogleSignIn googleSignIn;
-
-    if (!kIsWeb && Platform.isWindows) {
-      // Windows requires explicit client ID
-      if (GoogleAuthConfig.windowsClientId.isEmpty) {
-        throw Exception(
-          'Windows Client ID non configuré. '
-          'Voir lib/core/config/google_auth_config.dart',
-        );
-      }
-      googleSignIn = GoogleSignIn(
-        clientId: GoogleAuthConfig.windowsClientId,
-        scopes: ['email', 'profile'],
-      );
-    } else {
-      // Android/iOS use configuration from google-services.json / GoogleService-Info.plist
-      googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
-    }
-
-    // Trigger the authentication flow
+    final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
     final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
     if (googleUser == null) {
-      // User cancelled the sign-in
       return null;
     }
 
-    // Obtain the auth details from the request
     final googleAuth = await googleUser.authentication;
-
-    // Create a new credential
     final credential = GoogleAuthProvider.credential(
       accessToken: googleAuth.accessToken,
       idToken: googleAuth.idToken,
     );
 
-    // Sign in to Firebase with the Google credential
     return await _auth.signInWithCredential(credential);
   }
 }
@@ -114,4 +95,9 @@ class AuthRepository {
 /// Auth repository provider
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(ref.watch(firebaseAuthProvider));
+});
+
+/// Provider to check if Google Sign-In is available
+final isGoogleSignInAvailableProvider = Provider<bool>((ref) {
+  return ref.watch(authRepositoryProvider).isGoogleSignInAvailable;
 });
