@@ -1,0 +1,531 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' hide Family;
+import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../routing/app_router.dart';
+import '../../../auth/data/auth_repository.dart';
+import '../../data/family_repository.dart';
+import '../../domain/family.dart';
+import '../../domain/family_member.dart';
+
+class FamilySettingsScreen extends ConsumerStatefulWidget {
+  const FamilySettingsScreen({super.key});
+
+  @override
+  ConsumerState<FamilySettingsScreen> createState() => _FamilySettingsScreenState();
+}
+
+class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final familyAsync = ref.watch(currentFamilyProvider);
+    final membersAsync = ref.watch(familyMembersProvider);
+    final currentUser = ref.watch(currentUserProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Ma famille'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () => _showLogoutDialog(context),
+          ),
+        ],
+      ),
+      body: familyAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Erreur: $e')),
+        data: (family) {
+          if (family == null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Aucune famille configuree'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => context.go(AppRoutes.familySetup),
+                    child: const Text('Configurer'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Family card with invite code
+              _buildFamilyCard(family),
+              const SizedBox(height: 24),
+
+              // Members section
+              _buildSectionTitle('Membres'),
+              const SizedBox(height: 8),
+              membersAsync.when(
+                loading: () => const CircularProgressIndicator(),
+                error: (e, _) => Text('Erreur: $e'),
+                data: (members) => Column(
+                  children: [
+                    ...members.map((m) => _buildMemberCard(m, currentUser?.uid)),
+                    const SizedBox(height: 8),
+                    _buildInviteButton(family.inviteCode),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Meal settings
+              _buildSectionTitle('Repas a planifier'),
+              const SizedBox(height: 8),
+              _buildMealSettings(family),
+              const SizedBox(height: 24),
+
+              // Danger zone
+              _buildSectionTitle('Zone de danger', isError: true),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () => _showLeaveDialog(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                ),
+                child: const Text('Quitter la famille'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, {bool isError = false}) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: isError ? AppColors.error : null,
+      ),
+    );
+  }
+
+  Widget _buildFamilyCard(Family family) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: AppColors.primary,
+                  radius: 24,
+                  child: const Icon(Icons.family_restroom, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        family.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Code: ${family.inviteCode ?? "..."}',
+                        style: const TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy),
+                  tooltip: 'Copier le code',
+                  onPressed: () {
+                    if (family.inviteCode != null) {
+                      Clipboard.setData(ClipboardData(text: family.inviteCode!));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Code copie!')),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemberCard(FamilyMember member, String? currentUserId) {
+    final isCurrentUser = member.odauyX6H2Z == currentUserId;
+    final roleLabel = switch (member.role) {
+      FamilyRole.admin => 'Admin',
+      FamilyRole.parent => 'Parent',
+      FamilyRole.child => 'Enfant',
+    };
+
+    return Card(
+      child: ListTile(
+        onTap: () => _showMemberEditDialog(member),
+        leading: CircleAvatar(
+          backgroundColor: member.isKid ? AppColors.fruits : AppColors.secondary,
+          child: Icon(
+            member.isKid ? Icons.child_care : Icons.person,
+            color: Colors.white,
+          ),
+        ),
+        title: Row(
+          children: [
+            Text(member.name),
+            if (isCurrentUser)
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Vous',
+                  style: TextStyle(fontSize: 11, color: AppColors.primary),
+                ),
+              ),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(roleLabel),
+            if (member.allergies.isNotEmpty)
+              Wrap(
+                spacing: 4,
+                children: member.allergies.map((a) => Chip(
+                  label: Text(a, style: const TextStyle(fontSize: 10)),
+                  backgroundColor: AppColors.error.withValues(alpha: 0.1),
+                  padding: EdgeInsets.zero,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                )).toList(),
+              ),
+          ],
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        isThreeLine: member.allergies.isNotEmpty,
+      ),
+    );
+  }
+
+  void _showMemberEditDialog(FamilyMember member) {
+    final selectedAllergies = List<String>.from(member.allergies);
+    final avoidIngredients = List<String>.from(member.avoidIngredients);
+    bool isKid = member.isKid;
+    bool isPickyEater = member.isPickyEater;
+    final avoidController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Modifier ${member.name}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Is kid toggle
+                SwitchListTile(
+                  value: isKid,
+                  onChanged: (v) => setState(() => isKid = v),
+                  title: const Text('Enfant'),
+                  subtitle: const Text('Affiche les emojis pour noter'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text(
+                  'Allergies',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: AppConstants.commonAllergies.map((allergy) {
+                    final isSelected = selectedAllergies.contains(allergy);
+                    return FilterChip(
+                      label: Text(allergy.replaceAll('_', ' ')),
+                      selected: isSelected,
+                      selectedColor: AppColors.error.withValues(alpha: 0.2),
+                      onSelected: (selected) {
+                        setState(() {
+                          if (selected) {
+                            selectedAllergies.add(allergy);
+                          } else {
+                            selectedAllergies.remove(allergy);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+                const Divider(),
+                const SizedBox(height: 8),
+                // Picky eater mode
+                SwitchListTile(
+                  value: isPickyEater,
+                  onChanged: (v) => setState(() => isPickyEater = v),
+                  title: const Text('Mangeur difficile'),
+                  subtitle: const Text('Exclure certains ingredients'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                if (isPickyEater) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Ingredients a eviter',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: avoidController,
+                          decoration: const InputDecoration(
+                            hintText: 'Ex: champignons',
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                          onSubmitted: (value) {
+                            if (value.trim().isNotEmpty) {
+                              setState(() {
+                                avoidIngredients.add(value.trim().toLowerCase());
+                                avoidController.clear();
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: () {
+                          if (avoidController.text.trim().isNotEmpty) {
+                            setState(() {
+                              avoidIngredients.add(avoidController.text.trim().toLowerCase());
+                              avoidController.clear();
+                            });
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: avoidIngredients.map((ingredient) {
+                      return Chip(
+                        label: Text(ingredient),
+                        deleteIcon: const Icon(Icons.close, size: 16),
+                        onDeleted: () {
+                          setState(() => avoidIngredients.remove(ingredient));
+                        },
+                        backgroundColor: AppColors.warning.withValues(alpha: 0.15),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                final familyId = ref.read(currentFamilyIdProvider);
+                if (familyId == null) return;
+
+                final updated = member.copyWith(
+                  allergies: selectedAllergies,
+                  isKid: isKid,
+                  isPickyEater: isPickyEater,
+                  avoidIngredients: avoidIngredients,
+                );
+                await ref.read(familyRepositoryProvider).updateMember(familyId, updated);
+              },
+              child: const Text('Enregistrer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInviteButton(String? inviteCode) {
+    return OutlinedButton.icon(
+      onPressed: () {
+        if (inviteCode != null) {
+          _showInviteDialog(inviteCode);
+        }
+      },
+      icon: const Icon(Icons.person_add),
+      label: const Text('Inviter un membre'),
+    );
+  }
+
+  Widget _buildMealSettings(Family family) {
+    return Card(
+      child: Column(
+        children: AppConstants.defaultMealTypes.map((mealType) {
+          final label = AppConstants.mealLabels[mealType] ?? mealType;
+          final isEnabled = family.settings.enabledMeals.contains(mealType);
+          final isPrimary = AppConstants.primaryMealTypes.contains(mealType);
+
+          return CheckboxListTile(
+            value: isEnabled,
+            onChanged: (value) => _toggleMeal(family, mealType, value ?? false),
+            title: Row(
+              children: [
+                Text(label),
+                if (isPrimary)
+                  Container(
+                    margin: const EdgeInsets.only(left: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'Principal',
+                      style: TextStyle(fontSize: 11, color: AppColors.secondary),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Future<void> _toggleMeal(Family family, String mealType, bool enabled) async {
+    final meals = List<String>.from(family.settings.enabledMeals);
+    if (enabled) {
+      if (!meals.contains(mealType)) meals.add(mealType);
+    } else {
+      meals.remove(mealType);
+    }
+
+    final familyRepo = ref.read(familyRepositoryProvider);
+    await familyRepo.updateFamily(
+      family.id,
+      settings: family.settings.copyWith(enabledMeals: meals),
+    );
+  }
+
+  void _showInviteDialog(String code) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Inviter un membre'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Partagez ce code avec la personne a inviter:'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SelectableText(
+                code,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 4,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: code));
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Code copie!')),
+              );
+            },
+            child: const Text('Copier'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLeaveDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Quitter la famille?'),
+        content: const Text(
+          'Vous ne pourrez plus acceder aux recettes et plannings de cette famille.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Implement leave family
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Quitter'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Se deconnecter?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref.read(authRepositoryProvider).signOut();
+              if (mounted) context.go(AppRoutes.login);
+            },
+            child: const Text('Deconnecter'),
+          ),
+        ],
+      ),
+    );
+  }
+}

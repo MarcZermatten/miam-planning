@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "468767635530",
+    "project_id": "miam-planning-app",
+    "storage_bucket": "miam-planning-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:468767635530:android:f4ef1129ed615da1de4eb3",
+        "android_client_info": {
+          "package_name": "ch.zemax.miam_planning"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCvDVPBEMjz5p5-z37qhoU1aw6ofjPZuVs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
