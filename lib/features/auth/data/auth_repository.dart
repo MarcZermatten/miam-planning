@@ -1,6 +1,9 @@
+import 'dart:io' show Platform;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../../../core/config/google_auth_config.dart';
 
 /// Firebase Auth instance provider
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) {
@@ -66,7 +69,25 @@ class AuthRepository {
 
   /// Sign in with Google
   Future<UserCredential?> signInWithGoogle() async {
-    final googleSignIn = GoogleSignIn(scopes: ['email']);
+    // Configure GoogleSignIn based on platform
+    final GoogleSignIn googleSignIn;
+
+    if (!kIsWeb && Platform.isWindows) {
+      // Windows requires explicit client ID
+      if (GoogleAuthConfig.windowsClientId.isEmpty) {
+        throw Exception(
+          'Windows Client ID non configuré. '
+          'Voir lib/core/config/google_auth_config.dart',
+        );
+      }
+      googleSignIn = GoogleSignIn(
+        clientId: GoogleAuthConfig.windowsClientId,
+        scopes: ['email', 'profile'],
+      );
+    } else {
+      // Android/iOS use configuration from google-services.json / GoogleService-Info.plist
+      googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+    }
 
     // Trigger the authentication flow
     final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
