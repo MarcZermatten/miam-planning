@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/recipe_search_service.dart';
 import '../../data/recipe_scraper.dart';
@@ -22,6 +21,24 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
   bool _isLoading = false;
   bool _hasSearched = false;
   String? _importingUrl;
+
+  // Filters
+  int? _maxPrepTime; // null = no filter, otherwise max minutes
+  int? _minRating;   // null = no filter, otherwise min rating (e.g., 3 or 4)
+
+  List<RecipeSearchResult> get _filteredResults {
+    return _results.where((recipe) {
+      // Filter by prep time
+      if (_maxPrepTime != null && recipe.prepTime != null) {
+        if (recipe.prepTime! > _maxPrepTime!) return false;
+      }
+      // Filter by rating
+      if (_minRating != null && recipe.rating != null) {
+        if (recipe.rating! < _minRating!) return false;
+      }
+      return true;
+    }).toList();
+  }
 
   @override
   void dispose() {
@@ -187,11 +204,181 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
             ),
           ),
 
+          // Filter chips
+          if (_hasSearched && _results.isNotEmpty)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  // Time filter
+                  _buildFilterChip(
+                    label: _maxPrepTime == null ? 'Temps' : '<${_maxPrepTime!}min',
+                    icon: Icons.timer_outlined,
+                    isActive: _maxPrepTime != null,
+                    onTap: () => _showTimeFilterDialog(),
+                  ),
+                  const SizedBox(width: 8),
+                  // Rating filter
+                  _buildFilterChip(
+                    label: _minRating == null ? 'Note' : '>${_minRating}★',
+                    icon: Icons.star_outline,
+                    isActive: _minRating != null,
+                    onTap: () => _showRatingFilterDialog(),
+                  ),
+                  const SizedBox(width: 8),
+                  // Clear all filters
+                  if (_maxPrepTime != null || _minRating != null)
+                    ActionChip(
+                      label: const Text('Effacer'),
+                      avatar: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        setState(() {
+                          _maxPrepTime = null;
+                          _minRating = null;
+                        });
+                      },
+                    ),
+                  // Show count
+                  if (_filteredResults.length != _results.length)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Text(
+                        '${_filteredResults.length}/${_results.length}',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
           // Resultats
           Expanded(
             child: _buildResults(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required IconData icon,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return FilterChip(
+      label: Text(label),
+      avatar: Icon(icon, size: 18),
+      selected: isActive,
+      onSelected: (_) => onTap(),
+      selectedColor: AppColors.primary.withValues(alpha: 0.2),
+    );
+  }
+
+  void _showTimeFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Tous les temps'),
+              leading: const Icon(Icons.all_inclusive),
+              selected: _maxPrepTime == null,
+              onTap: () {
+                setState(() => _maxPrepTime = null);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text('Moins de 15 minutes'),
+              leading: const Icon(Icons.bolt),
+              selected: _maxPrepTime == 15,
+              onTap: () {
+                setState(() => _maxPrepTime = 15);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text('Moins de 30 minutes'),
+              leading: const Icon(Icons.timer),
+              selected: _maxPrepTime == 30,
+              onTap: () {
+                setState(() => _maxPrepTime = 30);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text('Moins de 45 minutes'),
+              leading: const Icon(Icons.schedule),
+              selected: _maxPrepTime == 45,
+              onTap: () {
+                setState(() => _maxPrepTime = 45);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text('Moins de 60 minutes'),
+              leading: const Icon(Icons.hourglass_bottom),
+              selected: _maxPrepTime == 60,
+              onTap: () {
+                setState(() => _maxPrepTime = 60);
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRatingFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Toutes les notes'),
+              leading: const Icon(Icons.star_border),
+              selected: _minRating == null,
+              onTap: () {
+                setState(() => _minRating = null);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text('3 etoiles ou plus'),
+              leading: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(3, (_) => const Icon(Icons.star, color: Colors.amber, size: 18)),
+              ),
+              selected: _minRating == 3,
+              onTap: () {
+                setState(() => _minRating = 3);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text('4 etoiles ou plus'),
+              leading: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(4, (_) => const Icon(Icons.star, color: Colors.amber, size: 18)),
+              ),
+              selected: _minRating == 4,
+              onTap: () {
+                setState(() => _minRating = 4);
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -252,11 +439,40 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
       );
     }
 
+    // Check if filters excluded all results
+    final filtered = _filteredResults;
+    if (filtered.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.filter_alt_off, size: 64, color: AppColors.textHint),
+            const SizedBox(height: 16),
+            Text(
+              'Aucun resultat avec ces filtres',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () {
+                setState(() {
+                  _maxPrepTime = null;
+                  _minRating = null;
+                });
+              },
+              icon: const Icon(Icons.clear),
+              label: const Text('Effacer les filtres'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _results.length,
+      itemCount: filtered.length,
       itemBuilder: (context, index) {
-        final recipe = _results[index];
+        final recipe = filtered[index];
         final isImporting = _importingUrl == recipe.url;
 
         return Card(
