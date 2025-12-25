@@ -62,13 +62,18 @@ class FamilySettings {
   final int weekStartDay; // 1 = Monday, 7 = Sunday
   final bool notificationsEnabled;
   final int reminderMinutesBefore; // Minutes before meal to send reminder
+  /// Meal slots to skip by day. Format: "dayOfWeek-mealType" e.g., "1-lunch" for Monday lunch
+  /// dayOfWeek: 1=Monday, 7=Sunday
+  final Set<String> disabledMealSlots;
 
   FamilySettings({
     List<String>? enabledMeals,
     this.weekStartDay = 1,
     this.notificationsEnabled = false,
     this.reminderMinutesBefore = 60, // Default: 1 hour before
-  }) : enabledMeals = enabledMeals ?? ['lunch', 'dinner'];
+    Set<String>? disabledMealSlots,
+  }) : enabledMeals = enabledMeals ?? ['lunch', 'dinner'],
+       disabledMealSlots = disabledMealSlots ?? {};
 
   factory FamilySettings.fromMap(Map<String, dynamic> map) {
     return FamilySettings(
@@ -76,6 +81,7 @@ class FamilySettings {
       weekStartDay: map['weekStartDay'] ?? 1,
       notificationsEnabled: map['notificationsEnabled'] ?? false,
       reminderMinutesBefore: map['reminderMinutesBefore'] ?? 60,
+      disabledMealSlots: Set<String>.from(map['disabledMealSlots'] ?? []),
     );
   }
 
@@ -85,6 +91,7 @@ class FamilySettings {
       'weekStartDay': weekStartDay,
       'notificationsEnabled': notificationsEnabled,
       'reminderMinutesBefore': reminderMinutesBefore,
+      'disabledMealSlots': disabledMealSlots.toList(),
     };
   }
 
@@ -93,12 +100,33 @@ class FamilySettings {
     int? weekStartDay,
     bool? notificationsEnabled,
     int? reminderMinutesBefore,
+    Set<String>? disabledMealSlots,
   }) {
     return FamilySettings(
       enabledMeals: enabledMeals ?? this.enabledMeals,
       weekStartDay: weekStartDay ?? this.weekStartDay,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       reminderMinutesBefore: reminderMinutesBefore ?? this.reminderMinutesBefore,
+      disabledMealSlots: disabledMealSlots ?? this.disabledMealSlots,
     );
+  }
+
+  /// Check if a meal slot is enabled for a given day
+  /// dayOfWeek: 1=Monday, 7=Sunday
+  bool isMealEnabled(int dayOfWeek, String mealType) {
+    if (!enabledMeals.contains(mealType)) return false;
+    return !disabledMealSlots.contains('$dayOfWeek-$mealType');
+  }
+
+  /// Toggle a meal slot for a specific day
+  FamilySettings toggleMealSlot(int dayOfWeek, String mealType) {
+    final slot = '$dayOfWeek-$mealType';
+    final newDisabled = Set<String>.from(disabledMealSlots);
+    if (newDisabled.contains(slot)) {
+      newDisabled.remove(slot);
+    } else {
+      newDisabled.add(slot);
+    }
+    return copyWith(disabledMealSlots: newDisabled);
   }
 }

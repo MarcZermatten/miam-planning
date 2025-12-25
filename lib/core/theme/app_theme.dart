@@ -1,5 +1,20 @@
 import 'package:flutter/material.dart';
 
+/// Extension to get theme-aware colors from BuildContext
+extension ThemeColors on BuildContext {
+  bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+
+  Color get colorBackground => isDarkMode ? AppColors.darkBackground : AppColors.background;
+  Color get colorSurface => isDarkMode ? AppColors.darkSurface : AppColors.surface;
+  Color get colorSurfaceVariant => isDarkMode ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant;
+  Color get colorTextPrimary => isDarkMode ? AppColors.darkTextPrimary : AppColors.textPrimary;
+  Color get colorTextSecondary => isDarkMode ? AppColors.darkTextSecondary : AppColors.textSecondary;
+  Color get colorTextHint => isDarkMode ? AppColors.darkTextHint : AppColors.textHint;
+  Color get colorPrimary => isDarkMode ? AppColors.darkPrimary : AppColors.primaryMedium;
+  Color get colorPrimaryDark => isDarkMode ? AppColors.darkPrimaryDark : AppColors.primaryDark;
+  Color get colorSecondary => isDarkMode ? AppColors.darkSecondary : AppColors.secondaryMedium;
+}
+
 /// Theme colors for MiamPlanning - Palette vert/bleu pastel
 class AppColors {
   // === MODE CLAIR ===

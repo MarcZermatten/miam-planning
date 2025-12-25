@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' hide Family;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/providers/theme_provider.dart';
 import '../../../features/auth/data/auth_repository.dart';
 import '../domain/family.dart';
 import '../domain/family_member.dart';
@@ -25,8 +27,33 @@ final userFamiliesProvider = StreamProvider<List<Family>>((ref) {
   return ref.watch(familyRepositoryProvider).getUserFamilies(user.uid);
 });
 
-/// Current selected family ID
-final currentFamilyIdProvider = StateProvider<String?>((ref) => null);
+/// Current selected family ID - persisted with SharedPreferences
+final currentFamilyIdProvider = StateNotifierProvider<CurrentFamilyNotifier, String?>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return CurrentFamilyNotifier(prefs);
+});
+
+/// Notifier for current family ID with persistence
+class CurrentFamilyNotifier extends StateNotifier<String?> {
+  final SharedPreferences _prefs;
+  static const _key = 'current_family_id';
+
+  CurrentFamilyNotifier(this._prefs) : super(_prefs.getString(_key));
+
+  void setFamilyId(String? familyId) {
+    state = familyId;
+    if (familyId != null) {
+      _prefs.setString(_key, familyId);
+    } else {
+      _prefs.remove(_key);
+    }
+  }
+
+  void clearFamilyId() {
+    state = null;
+    _prefs.remove(_key);
+  }
+}
 
 /// Current family stream
 final currentFamilyProvider = StreamProvider<Family?>((ref) {

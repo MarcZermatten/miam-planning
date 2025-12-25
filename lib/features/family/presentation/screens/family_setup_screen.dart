@@ -52,7 +52,7 @@ class _FamilySetupScreenState extends ConsumerState<FamilySetupScreen> {
       );
 
       if (mounted) {
-        ref.read(currentFamilyIdProvider.notifier).state = family.id;
+        ref.read(currentFamilyIdProvider.notifier).setFamilyId(family.id);
         context.go(AppRoutes.home);
       }
     } catch (e) {
@@ -91,7 +91,7 @@ class _FamilySetupScreenState extends ConsumerState<FamilySetupScreen> {
       }
 
       if (mounted) {
-        ref.read(currentFamilyIdProvider.notifier).state = family.id;
+        ref.read(currentFamilyIdProvider.notifier).setFamilyId(family.id);
         context.go(AppRoutes.home);
       }
     } catch (e) {

@@ -55,6 +55,8 @@ class DishRepository {
     String? imageUrl,
     List<DishCategory> categories = const [DishCategory.complete],
     List<String> tags = const [],
+    bool isFrozen = false,
+    int frozenPortions = 0,
   }) async {
     final docRef = _dishesCollection(familyId).doc();
     final dish = Dish(
@@ -65,6 +67,9 @@ class DishRepository {
       tags: tags,
       createdAt: DateTime.now(),
       createdBy: createdBy,
+      isFrozen: isFrozen,
+      frozenPortions: frozenPortions,
+      frozenAt: isFrozen ? DateTime.now() : null,
     );
 
     await docRef.set(dish.toFirestore());

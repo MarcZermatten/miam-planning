@@ -59,7 +59,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
             ),
             Tab(
               icon: const Icon(Icons.lightbulb_outline),
-              text: 'Idees (${suggestions.length})',
+              text: 'Suggestions (${suggestions.length})',
             ),
           ],
         ),
@@ -127,20 +127,20 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
           Icon(
             Icons.kitchen,
             size: 64,
-            color: AppColors.textHint,
+            color: context.colorTextHint,
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Frigo vide',
             style: TextStyle(
               fontSize: 18,
-              color: AppColors.textSecondary,
+              color: context.colorTextSecondary,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Ajoutez les ingredients que vous avez',
-            style: TextStyle(color: AppColors.textHint),
+            style: TextStyle(color: context.colorTextHint),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
@@ -161,6 +161,18 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
     return ListView(
       padding: const EdgeInsets.only(bottom: 80),
       children: [
+        // Bouton ajout rapide toujours visible
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: OutlinedButton.icon(
+            onPressed: _showQuickAddDialog,
+            icon: const Icon(Icons.flash_on),
+            label: const Text('Ajout rapide'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
         if (regular.isNotEmpty) ...[
           _buildSectionHeader('Ingredients disponibles', regular.length),
           ...regular.map((item) => _buildItemTile(item)),
@@ -180,10 +192,10 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: AppColors.textSecondary,
+              color: context.colorTextSecondary,
             ),
           ),
           const SizedBox(width: 8),
@@ -267,20 +279,20 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
           Icon(
             Icons.lightbulb_outline,
             size: 64,
-            color: AppColors.textHint,
+            color: context.colorTextHint,
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Pas de suggestions',
             style: TextStyle(
               fontSize: 18,
-              color: AppColors.textSecondary,
+              color: context.colorTextSecondary,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Ajoutez des ingredients pour voir les recettes possibles',
-            style: TextStyle(color: AppColors.textHint),
+            style: TextStyle(color: context.colorTextHint),
             textAlign: TextAlign.center,
           ),
         ],
@@ -295,23 +307,23 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.ac_unit,
             size: 64,
-            color: AppColors.textHint,
+            color: context.colorTextHint,
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Congelateur vide',
             style: TextStyle(
               fontSize: 18,
-              color: AppColors.textSecondary,
+              color: context.colorTextSecondary,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Ajoutez des plats prepares que vous avez congeles',
-            style: TextStyle(color: AppColors.textHint),
+            style: TextStyle(color: context.colorTextHint),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -567,22 +579,17 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
 
                 final userId = ref.read(currentUserProvider)?.uid ?? '';
 
-                // Create dish with frozen portions
-                final dish = await ref.read(dishRepositoryProvider).createDish(
+                // Create dish directly with frozen portions
+                await ref.read(dishRepositoryProvider).createDish(
                       familyId: familyId,
                       name: nameController.text.trim(),
                       createdBy: userId,
                       categories: selectedCategories.isNotEmpty
                           ? selectedCategories
                           : [DishCategory.complete],
+                      isFrozen: true,
+                      frozenPortions: portions,
                     );
-                // Update with frozen portions
-                final updated = dish.copyWith(
-                  isFrozen: true,
-                  frozenPortions: portions,
-                  frozenAt: DateTime.now(),
-                );
-                await ref.read(dishRepositoryProvider).updateDish(familyId, updated);
 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(

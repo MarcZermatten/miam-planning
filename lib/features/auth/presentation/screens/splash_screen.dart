@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../routing/app_router.dart';
+import '../../../family/data/family_repository.dart';
 import '../../data/auth_repository.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -21,13 +22,40 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   Future<void> _checkAuthAndNavigate() async {
     await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      final user = ref.read(currentUserProvider);
-      if (user != null) {
-        context.go(AppRoutes.home);
+    if (!mounted) return;
+
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      context.go(AppRoutes.login);
+      return;
+    }
+
+    // User is logged in - check if we have a saved family
+    final savedFamilyId = ref.read(currentFamilyIdProvider);
+
+    if (savedFamilyId != null) {
+      // Verify the family still exists and user is still a member
+      final family = await ref.read(familyRepositoryProvider).watchFamily(savedFamilyId).first;
+      if (family != null) {
+        // Family exists, go to home
+        if (mounted) context.go(AppRoutes.home);
+        return;
       } else {
-        context.go(AppRoutes.login);
+        // Family was deleted, clear the saved ID
+        ref.read(currentFamilyIdProvider.notifier).clearFamilyId();
       }
+    }
+
+    // No saved family or it was invalid - check user's families
+    final families = await ref.read(familyRepositoryProvider).getUserFamilies(user.uid).first;
+
+    if (families.isNotEmpty) {
+      // Auto-select first family
+      ref.read(currentFamilyIdProvider.notifier).setFamilyId(families.first.id);
+      if (mounted) context.go(AppRoutes.home);
+    } else {
+      // No families - go to family setup
+      if (mounted) context.go(AppRoutes.familySetup);
     }
   }
 
