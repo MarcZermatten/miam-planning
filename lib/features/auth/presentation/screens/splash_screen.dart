@@ -21,10 +21,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
 
-    final user = ref.read(currentUserProvider);
+    // Wait for Firebase Auth to restore session (not just the stream value)
+    final auth = ref.read(firebaseAuthProvider);
+    final user = auth.currentUser ?? await auth.authStateChanges().first;
+
     if (user == null) {
       context.go(AppRoutes.login);
       return;
