@@ -1,7 +1,7 @@
 /// App-wide constants
 class AppConstants {
   // App info
-  static const String appName = 'MiamPlanning';
+  static const String appName = 'Popote';
   static const String appVersion = '1.0.0';
 
   // Meal types (Swiss French terminology)

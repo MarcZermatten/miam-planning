@@ -1,16 +1,24 @@
-# miam_planning
+# Popote
 
-A new Flutter project.
+Application de planification de repas pour les familles.
 
-## Getting Started
+## Fonctionnalités
 
-This project is a starting point for a Flutter application.
+- Planification hebdomadaire des repas
+- Gestion des recettes (import depuis Marmiton, Betty Bossi, etc.)
+- Liste de courses automatique
+- Gestion du congélateur
+- Profils famille avec allergies et préférences
+- Indicateurs nutritionnels
+- Mode sombre
 
-A few resources to get you started if this is your first Flutter project:
+## Installation
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Téléchargez l'APK depuis les [Releases](https://github.com/MarcZermatten/miam-planning/releases).
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Développement
+
+```bash
+flutter pub get
+flutter run
+```

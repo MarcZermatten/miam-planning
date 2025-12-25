@@ -17,7 +17,7 @@ class RecipeSearchScreen extends ConsumerStatefulWidget {
 class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
   final _searchController = TextEditingController();
   List<RecipeSearchResult> _results = [];
-  RecipeProvider _selectedProvider = RecipeProvider.marmiton;
+  RecipeProvider _selectedProvider = RecipeProvider.bettyBossi;
   bool _isLoading = false;
   bool _hasSearched = false;
   String? _importingUrl;

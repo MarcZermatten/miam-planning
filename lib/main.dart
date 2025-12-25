@@ -24,13 +24,13 @@ void main() async {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(sharedPreferences),
       ],
-      child: const MiamPlanningApp(),
+      child: const PopoteApp(),
     ),
   );
 }
 
-class MiamPlanningApp extends ConsumerWidget {
-  const MiamPlanningApp({super.key});
+class PopoteApp extends ConsumerWidget {
+  const PopoteApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -38,7 +38,7 @@ class MiamPlanningApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
-      title: 'MiamPlanning',
+      title: 'Popote',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "ch.zemax" "\0"
-            VALUE "FileDescription", "miam_planning" "\0"
+            VALUE "FileDescription", "Popote" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "miam_planning" "\0"
+            VALUE "InternalName", "popote" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 ch.zemax. All rights reserved." "\0"
-            VALUE "OriginalFilename", "miam_planning.exe" "\0"
-            VALUE "ProductName", "miam_planning" "\0"
+            VALUE "OriginalFilename", "popote.exe" "\0"
+            VALUE "ProductName", "Popote" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

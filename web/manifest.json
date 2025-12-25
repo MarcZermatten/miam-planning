@@ -1,11 +1,11 @@
 {
-    "name": "miam_planning",
-    "short_name": "miam_planning",
+    "name": "Popote",
+    "short_name": "Popote",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#4CAF50",
+    "theme_color": "#4CAF50",
+    "description": "Popote - Planification de repas en famille",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

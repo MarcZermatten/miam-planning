@@ -50,14 +50,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     }
 
     // No saved family or it was invalid - check user's families
-    final families = await ref.read(familyRepositoryProvider).getUserFamilies(user.uid).first;
+    try {
+      final families = await ref.read(familyRepositoryProvider)
+          .getUserFamilies(user.uid)
+          .first
+          .timeout(const Duration(seconds: 10));
 
-    if (families.isNotEmpty) {
-      // Auto-select first family
-      ref.read(currentFamilyIdProvider.notifier).setFamilyId(families.first.id);
-      if (mounted) context.go(AppRoutes.home);
-    } else {
-      // No families - go to family setup
+      if (families.isNotEmpty) {
+        // Auto-select first family
+        ref.read(currentFamilyIdProvider.notifier).setFamilyId(families.first.id);
+        if (mounted) context.go(AppRoutes.home);
+      } else {
+        // No families - go to family setup
+        if (mounted) context.go(AppRoutes.familySetup);
+      }
+    } catch (e) {
+      // Timeout or error - go to family setup
+      print('Error loading families: $e');
       if (mounted) context.go(AppRoutes.familySetup);
     }
   }
@@ -71,24 +80,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // App icon
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Icon(
-                Icons.restaurant,
-                size: 64,
-                color: AppColors.primary,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset(
+                'assets/popote_logo.png',
+                width: 120,
+                height: 120,
               ),
             ),
             const SizedBox(height: 24),
             // App name
             const Text(
-              'MiamPlanning',
+              'Popote',
               style: TextStyle(
-                fontSize: 32,
+                fontSize: 36,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),

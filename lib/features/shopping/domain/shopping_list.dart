@@ -209,7 +209,7 @@ class ShoppingList {
   /// Export as plain text
   String toPlainText() {
     final buffer = StringBuffer();
-    buffer.writeln('Liste de courses - MiamPlanning');
+    buffer.writeln('Liste de courses - Popote');
     buffer.writeln('');
 
     for (final entry in groupedItems.entries) {

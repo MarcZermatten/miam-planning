@@ -4,8 +4,8 @@ import 'package:html/parser.dart' as html_parser;
 
 /// Recipe search providers
 enum RecipeProvider {
-  marmiton,
   bettyBossi,
+  marmiton,
   cuisineAz,
 }
 
@@ -68,9 +68,10 @@ class RecipeSearchResult {
 /// Service for searching recipes across multiple providers
 class RecipeSearchService {
   static const _headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Cache-Control': 'no-cache',
   };
 
   /// Search for recipes on a specific provider
@@ -96,6 +97,7 @@ class RecipeSearchService {
   ) async {
     try {
       final encodedQuery = Uri.encodeComponent(query);
+      // Marmiton uses this search URL format
       final url = 'https://www.marmiton.org/recettes/recherche.aspx?aqt=$encodedQuery';
 
       final response = await http.get(Uri.parse(url), headers: _headers);
@@ -105,23 +107,45 @@ class RecipeSearchService {
       final document = html_parser.parse(body);
 
       final results = <RecipeSearchResult>[];
-      final cards = document.querySelectorAll('.recipe-card, [class*="recipe"]');
+
+      // Try multiple selector strategies
+      var cards = document.querySelectorAll('a[href*="/recettes/recette_"]');
+      if (cards.isEmpty) {
+        cards = document.querySelectorAll('.recipe-card');
+      }
+      if (cards.isEmpty) {
+        cards = document.querySelectorAll('[class*="MRTN__sc"]'); // New Marmiton classes
+      }
+
+      final seenUrls = <String>{};
 
       for (final card in cards) {
         if (results.length >= maxResults) break;
 
         try {
-          final titleEl = card.querySelector('.recipe-card__title, h4, h3, [class*="title"]');
-          final title = titleEl?.text.trim() ?? '';
-          if (title.isEmpty || title.length < 3) continue;
+          // Get link - might be the card itself or a child
+          String? link = card.attributes['href'];
+          if (link == null || link.isEmpty) {
+            final linkEl = card.querySelector('a[href*="/recettes/"]');
+            link = linkEl?.attributes['href'];
+          }
+          if (link == null || link.isEmpty) continue;
+          if (!link.contains('recette')) continue;
 
-          final linkEl = card.querySelector('a[href*="/recettes/"]');
-          final link = linkEl?.attributes['href'] ?? '';
-          if (link.isEmpty || !link.contains('recette')) continue;
           final fullUrl = link.startsWith('http') ? link : 'https://www.marmiton.org$link';
+          if (seenUrls.contains(fullUrl)) continue;
+          seenUrls.add(fullUrl);
 
+          // Get title from various possible elements
+          var title = card.querySelector('h4, h3, h2, [class*="title"]')?.text.trim();
+          title ??= card.text.trim().split('\n').first;
+          if (title.isEmpty || title.length < 3 || title.length > 200) continue;
+
+          // Get image
           final imgEl = card.querySelector('img');
-          String? imageUrl = imgEl?.attributes['data-src'] ?? imgEl?.attributes['src'];
+          String? imageUrl = imgEl?.attributes['data-src'] ??
+              imgEl?.attributes['data-lazy-src'] ??
+              imgEl?.attributes['src'];
 
           results.add(RecipeSearchResult(
             title: title,
@@ -136,6 +160,7 @@ class RecipeSearchService {
 
       return results;
     } catch (e) {
+      print('Marmiton search error: $e');
       return [];
     }
   }
@@ -147,32 +172,56 @@ class RecipeSearchService {
   ) async {
     try {
       final encodedQuery = Uri.encodeComponent(query);
-      final url = 'https://www.bettybossi.ch/fr/Rezept/Suche?query=$encodedQuery';
+      // Betty Bossi new URL structure (2024+)
+      final url = 'https://www.bettybossi.ch/fr/suche?query=$encodedQuery&tab=rezepte';
 
       final response = await http.get(Uri.parse(url), headers: _headers);
-      if (response.statusCode != 200) return [];
+      if (response.statusCode != 200) {
+        // Try alternative URL
+        final altUrl = 'https://www.bettybossi.ch/fr/Rezept/Suche?query=$encodedQuery';
+        final altResponse = await http.get(Uri.parse(altUrl), headers: _headers);
+        if (altResponse.statusCode != 200) return [];
+      }
 
       final body = utf8.decode(response.bodyBytes, allowMalformed: true);
       final document = html_parser.parse(body);
 
       final results = <RecipeSearchResult>[];
-      final cards = document.querySelectorAll('[class*="recipe"], article, .teaser');
+      final seenUrls = <String>{};
+
+      // Try multiple selector strategies
+      var cards = document.querySelectorAll('a[href*="/rezept/"], a[href*="/Rezept/"]');
+      if (cards.isEmpty) {
+        cards = document.querySelectorAll('[class*="recipe"], article, .teaser, [class*="card"]');
+      }
 
       for (final card in cards) {
         if (results.length >= maxResults) break;
 
         try {
-          final titleEl = card.querySelector('h2, h3, [class*="title"]');
-          final title = titleEl?.text.trim() ?? '';
-          if (title.isEmpty || title.length < 3) continue;
+          // Get link
+          String? link = card.attributes['href'];
+          if (link == null || link.isEmpty) {
+            final linkEl = card.querySelector('a[href*="/rezept/"], a[href*="/Rezept/"]');
+            link = linkEl?.attributes['href'];
+          }
+          if (link == null || link.isEmpty) continue;
+          if (!link.toLowerCase().contains('rezept')) continue;
 
-          final linkEl = card.querySelector('a[href*="/Rezept/"]');
-          final link = linkEl?.attributes['href'] ?? '';
-          if (link.isEmpty) continue;
           final fullUrl = link.startsWith('http') ? link : 'https://www.bettybossi.ch$link';
+          if (seenUrls.contains(fullUrl)) continue;
+          seenUrls.add(fullUrl);
 
+          // Get title
+          var title = card.querySelector('h2, h3, h4, [class*="title"]')?.text.trim();
+          title ??= card.text.trim().split('\n').first;
+          if (title.isEmpty || title.length < 3 || title.length > 200) continue;
+
+          // Get image
           final imgEl = card.querySelector('img');
-          String? imageUrl = imgEl?.attributes['data-src'] ?? imgEl?.attributes['src'];
+          String? imageUrl = imgEl?.attributes['data-src'] ??
+              imgEl?.attributes['data-lazy-src'] ??
+              imgEl?.attributes['src'];
 
           results.add(RecipeSearchResult(
             title: title,
@@ -187,6 +236,7 @@ class RecipeSearchService {
 
       return results;
     } catch (e) {
+      print('Betty Bossi search error: $e');
       return [];
     }
   }

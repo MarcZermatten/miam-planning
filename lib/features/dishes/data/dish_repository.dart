@@ -23,12 +23,15 @@ class DishRepository {
   }
 
   /// Watch frozen dishes only (for freezer module)
+  /// Note: Using single where clause + client-side filter to avoid composite index requirement
   Stream<List<Dish>> watchFrozenDishes(String familyId) {
     return _dishesCollection(familyId)
         .where('isFrozen', isEqualTo: true)
-        .where('frozenPortions', isGreaterThan: 0)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map(Dish.fromFirestore).toList());
+        .map((snapshot) => snapshot.docs
+            .map(Dish.fromFirestore)
+            .where((dish) => dish.frozenPortions > 0)
+            .toList());
   }
 
   /// Watch dishes by category

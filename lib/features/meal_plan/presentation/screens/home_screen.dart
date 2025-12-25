@@ -35,7 +35,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('MiamPlanning'),
+        title: const Text('Popote'),
         actions: [
           IconButton(
             icon: const Icon(Icons.family_restroom),

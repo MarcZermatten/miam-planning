@@ -86,9 +86,9 @@ class NotificationService {
     String? payload,
   }) async {
     const androidDetails = AndroidNotificationDetails(
-      'miam_planning_channel',
-      'Miam Planning',
-      channelDescription: 'Notifications pour Miam Planning',
+      'popote_channel',
+      'Popote',
+      channelDescription: 'Notifications pour Popote',
       importance: Importance.high,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
@@ -117,7 +117,7 @@ class NotificationService {
     String? payload,
   }) async {
     const androidDetails = AndroidNotificationDetails(
-      'miam_planning_reminders',
+      'popote_reminders',
       'Rappels repas',
       channelDescription: 'Rappels pour planifier vos repas',
       importance: Importance.high,
@@ -159,7 +159,7 @@ class NotificationService {
     String? payload,
   }) async {
     const androidDetails = AndroidNotificationDetails(
-      'miam_planning_daily',
+      'popote_daily',
       'Rappels quotidiens',
       channelDescription: 'Rappels quotidiens pour planifier vos repas',
       importance: Importance.high,

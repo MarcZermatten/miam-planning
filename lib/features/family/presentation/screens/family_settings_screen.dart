@@ -754,7 +754,7 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
 
   void _showInviteDialog(String code) {
     final familyAsync = ref.read(currentFamilyProvider);
-    final familyName = familyAsync.value?.name ?? 'MiamPlanning';
+    final familyName = familyAsync.value?.name ?? 'Popote';
 
     showDialog(
       context: context,
@@ -812,7 +812,7 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
                   onPressed: () {
                     SharePlus.instance.share(
                       ShareParams(
-                        text: 'Rejoins notre famille "$familyName" sur MiamPlanning!\n\n'
+                        text: 'Rejoins notre famille "$familyName" sur Popote!\n\n'
                             'Code d\'invitation: $code\n\n'
                             'Telecharge l\'app et entre ce code pour nous rejoindre.',
                       ),

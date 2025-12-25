@@ -149,7 +149,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 24),
                 // Title
                 Text(
-                  _isSignUp ? 'Creer un compte' : 'Bienvenue sur\nMiamPlanning',
+                  _isSignUp ? 'Creer un compte' : 'Bienvenue sur\nPopote',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 28,
@@ -159,7 +159,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 8),
                 Text(
                   _isSignUp
-                      ? 'Rejoignez MiamPlanning pour planifier vos repas'
+                      ? 'Rejoignez Popote pour planifier vos repas'
                       : 'Connectez-vous pour planifier les repas de votre famille',
                   textAlign: TextAlign.center,
                   style: const TextStyle(

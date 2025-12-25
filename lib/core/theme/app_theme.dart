@@ -15,7 +15,7 @@ extension ThemeColors on BuildContext {
   Color get colorSecondary => isDarkMode ? AppColors.darkSecondary : AppColors.secondaryMedium;
 }
 
-/// Theme colors for MiamPlanning - Palette vert/bleu pastel
+/// Theme colors for Popote - Palette vert/bleu pastel
 class AppColors {
   // === MODE CLAIR ===
 
