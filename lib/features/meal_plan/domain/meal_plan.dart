@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../dishes/domain/dish.dart';
 
 /// A single dish assignment within a meal
 class DishAssignment {
@@ -9,6 +10,8 @@ class DishAssignment {
   final bool fromFreezer;
   final int portionsUsed;
   final String? note;
+  /// Nutritional categories of the dish (vegetable, protein, starch, etc.)
+  final List<String> categories;
 
   DishAssignment({
     required this.dishId,
@@ -18,6 +21,7 @@ class DishAssignment {
     this.fromFreezer = false,
     this.portionsUsed = 1,
     this.note,
+    this.categories = const [],
   });
 
   factory DishAssignment.fromMap(Map<String, dynamic> map) {
@@ -29,6 +33,7 @@ class DishAssignment {
       fromFreezer: map['fromFreezer'] ?? false,
       portionsUsed: map['portionsUsed'] ?? 1,
       note: map['note'],
+      categories: List<String>.from(map['categories'] ?? []),
     );
   }
 
@@ -41,6 +46,7 @@ class DishAssignment {
       'fromFreezer': fromFreezer,
       'portionsUsed': portionsUsed,
       'note': note,
+      'categories': categories,
     };
   }
 
@@ -52,6 +58,7 @@ class DishAssignment {
     bool? fromFreezer,
     int? portionsUsed,
     String? note,
+    List<String>? categories,
   }) {
     return DishAssignment(
       dishId: dishId ?? this.dishId,
@@ -61,8 +68,24 @@ class DishAssignment {
       fromFreezer: fromFreezer ?? this.fromFreezer,
       portionsUsed: portionsUsed ?? this.portionsUsed,
       note: note ?? this.note,
+      categories: categories ?? this.categories,
     );
   }
+
+  /// Check if dish has a specific category
+  bool hasCategory(DishCategory category) => categories.contains(category.name);
+
+  /// Check if dish has vegetable
+  bool get hasVegetable => hasCategory(DishCategory.vegetable);
+
+  /// Check if dish has starch/carbs
+  bool get hasStarch => hasCategory(DishCategory.starch);
+
+  /// Check if dish has protein
+  bool get hasProtein => hasCategory(DishCategory.protein);
+
+  /// Check if this is a complete meal (has vegetable + starch)
+  bool get isComplete => hasCategory(DishCategory.complete);
 }
 
 /// A meal assignment containing one or more dishes
@@ -74,6 +97,28 @@ class MealAssignment {
     this.dishes = const [],
     this.note,
   });
+
+  /// Check if meal has vegetable (from any dish or complete dish)
+  bool get hasVegetable => dishes.any((d) => d.hasVegetable || d.isComplete);
+
+  /// Check if meal has starch (from any dish or complete dish)
+  bool get hasStarch => dishes.any((d) => d.hasStarch || d.isComplete);
+
+  /// Check if meal has protein (from any dish)
+  bool get hasProtein => dishes.any((d) => d.hasProtein || d.isComplete);
+
+  /// Check if meal is considered "complete" (has vegetable + starch at minimum)
+  bool get isNutritionallyComplete => hasVegetable && hasStarch;
+
+  /// Get nutritional status message
+  String get nutritionalStatus {
+    if (isEmpty) return 'Non planifie';
+    if (isNutritionallyComplete) return 'Repas complet';
+    final missing = <String>[];
+    if (!hasVegetable) missing.add('legume');
+    if (!hasStarch) missing.add('feculent');
+    return 'Manque: ${missing.join(', ')}';
+  }
 
   /// Legacy constructor for backward compatibility
   factory MealAssignment.legacy({

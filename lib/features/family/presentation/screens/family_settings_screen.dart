@@ -452,37 +452,174 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
   }
 
   Widget _buildMealSettings(Family family) {
-    return Card(
-      child: Column(
-        children: AppConstants.defaultMealTypes.map((mealType) {
-          final label = AppConstants.mealLabels[mealType] ?? mealType;
-          final isEnabled = family.settings.enabledMeals.contains(mealType);
-          final isPrimary = AppConstants.primaryMealTypes.contains(mealType);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Global meal types
+        Card(
+          child: Column(
+            children: AppConstants.defaultMealTypes.map((mealType) {
+              final label = AppConstants.mealLabels[mealType] ?? mealType;
+              final isEnabled = family.settings.enabledMeals.contains(mealType);
+              final isPrimary = AppConstants.primaryMealTypes.contains(mealType);
 
-          return CheckboxListTile(
-            value: isEnabled,
-            onChanged: (value) => _toggleMeal(family, mealType, value ?? false),
-            title: Row(
+              return CheckboxListTile(
+                value: isEnabled,
+                onChanged: (value) => _toggleMeal(family, mealType, value ?? false),
+                title: Row(
+                  children: [
+                    Text(label),
+                    if (isPrimary)
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'Principal',
+                          style: TextStyle(fontSize: 11, color: AppColors.secondary),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Weekly schedule configuration
+        Text(
+          'Semaine type',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: context.colorTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Desactivez les repas que vous ne planifiez pas',
+          style: TextStyle(
+            fontSize: 12,
+            color: context.colorTextHint,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _buildWeeklyScheduleGrid(family),
+      ],
+    );
+  }
+
+  Widget _buildWeeklyScheduleGrid(Family family) {
+    final enabledMeals = family.settings.enabledMeals
+        .where((m) => AppConstants.primaryMealTypes.contains(m))
+        .toList();
+
+    if (enabledMeals.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'Activez au moins un repas principal (Diner ou Souper) pour configurer la semaine type.',
+            style: TextStyle(color: context.colorTextHint),
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            // Header row with meal types
+            Row(
               children: [
-                Text(label),
-                if (isPrimary)
-                  Container(
-                    margin: const EdgeInsets.only(left: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.secondary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'Principal',
-                      style: TextStyle(fontSize: 11, color: AppColors.secondary),
+                const SizedBox(width: 60), // Space for day labels
+                ...enabledMeals.map((meal) => Expanded(
+                  child: Center(
+                    child: Text(
+                      AppConstants.mealLabels[meal] ?? meal,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
+                )),
               ],
             ),
-          );
-        }).toList(),
+            const SizedBox(height: 8),
+            // Day rows
+            ...List.generate(7, (dayIndex) {
+              final dayOfWeek = dayIndex + 1; // 1 = Monday
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 60,
+                      child: Text(
+                        AppConstants.weekDays[dayIndex].substring(0, 3),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: context.colorTextSecondary,
+                        ),
+                      ),
+                    ),
+                    ...enabledMeals.map((meal) {
+                      final isEnabled = family.settings.isMealEnabled(dayOfWeek, meal);
+                      return Expanded(
+                        child: Center(
+                          child: GestureDetector(
+                            onTap: () => _toggleMealSlot(family, dayOfWeek, meal),
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: isEnabled
+                                    ? AppColors.primaryMedium
+                                    : context.colorSurfaceVariant,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isEnabled
+                                      ? AppColors.primaryMedium
+                                      : context.colorTextHint.withValues(alpha: 0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Icon(
+                                isEnabled ? Icons.check : Icons.close,
+                                size: 20,
+                                color: isEnabled
+                                    ? Colors.white
+                                    : context.colorTextHint,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
       ),
+    );
+  }
+
+  Future<void> _toggleMealSlot(Family family, int dayOfWeek, String mealType) async {
+    final familyId = ref.read(currentFamilyIdProvider);
+    if (familyId == null) return;
+
+    final newSettings = family.settings.toggleMealSlot(dayOfWeek, mealType);
+    await ref.read(familyRepositoryProvider).updateFamily(
+      familyId,
+      settings: newSettings,
     );
   }
 

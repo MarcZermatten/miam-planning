@@ -143,6 +143,18 @@ class WeeklyPlannerScreen extends ConsumerWidget {
   ) {
     final isToday = _isSameDay(day, DateTime.now());
     final dayMeals = mealPlan?.getMealsForDate(day) ?? DayMeals();
+    final family = ref.watch(currentFamilyProvider).value;
+    final dayOfWeek = day.weekday; // 1=Monday, 7=Sunday
+
+    // Filter meals based on weekly schedule config
+    final mealsForThisDay = enabledMeals.where((mealType) {
+      return family?.settings.isMealEnabled(dayOfWeek, mealType) ?? true;
+    }).toList();
+
+    // Don't show days with no meals to plan
+    if (mealsForThisDay.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Card(
       color: isToday ? AppColors.primary.withValues(alpha: 0.1) : null,
@@ -159,8 +171,8 @@ class WeeklyPlannerScreen extends ConsumerWidget {
             fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
           ),
         ),
-        subtitle: _buildDaySummary(dayMeals, enabledMeals),
-        children: enabledMeals.map((mealType) {
+        subtitle: _buildDaySummary(dayMeals, mealsForThisDay),
+        children: mealsForThisDay.map((mealType) {
           final assignment = dayMeals.getMeal(mealType);
           final label = AppConstants.mealLabels[mealType] ?? mealType;
 
@@ -216,7 +228,7 @@ class WeeklyPlannerScreen extends ConsumerWidget {
     String label,
     MealAssignment? assignment,
   ) {
-    final hasAssignment = assignment != null;
+    final hasAssignment = assignment != null && assignment.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -248,9 +260,17 @@ class WeeklyPlannerScreen extends ConsumerWidget {
             color: Colors.white,
           ),
         ),
-        title: Text(
-          label,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        title: Row(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+            if (hasAssignment) ...[
+              const SizedBox(width: 8),
+              _buildNutritionalIndicators(assignment),
+            ],
+          ],
         ),
         subtitle: Text(
           hasAssignment ? assignment.recipeTitle : 'Tap pour ajouter',
@@ -290,6 +310,59 @@ class WeeklyPlannerScreen extends ConsumerWidget {
             _showRecipeSelector(context, ref, day, mealType);
           }
         },
+      ),
+    );
+  }
+
+  /// Build nutritional indicators (vegetable, starch, protein)
+  Widget _buildNutritionalIndicators(MealAssignment assignment) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildNutrientBadge(
+          '🥦',
+          assignment.hasVegetable,
+          AppColors.vegetables,
+          'Legume',
+        ),
+        const SizedBox(width: 4),
+        _buildNutrientBadge(
+          '🍝',
+          assignment.hasStarch,
+          AppColors.grains,
+          'Feculent',
+        ),
+        const SizedBox(width: 4),
+        _buildNutrientBadge(
+          '🥩',
+          assignment.hasProtein,
+          AppColors.protein,
+          'Proteine',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNutrientBadge(String emoji, bool isPresent, Color color, String tooltip) {
+    return Tooltip(
+      message: isPresent ? '$tooltip present' : '$tooltip manquant',
+      child: Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: isPresent ? color : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(4),
+          border: isPresent ? null : Border.all(color: Colors.grey.shade400, width: 0.5),
+        ),
+        child: Center(
+          child: Text(
+            emoji,
+            style: TextStyle(
+              fontSize: 12,
+              color: isPresent ? null : Colors.grey.shade400,
+            ),
+          ),
+        ),
       ),
     );
   }
