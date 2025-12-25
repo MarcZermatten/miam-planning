@@ -514,8 +514,9 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
   }
 
   Widget _buildWeeklyScheduleGrid(Family family) {
-    final enabledMeals = family.settings.enabledMeals
-        .where((m) => AppConstants.primaryMealTypes.contains(m))
+    // Show all enabled meals in the grid, ordered by defaultMealTypes
+    final enabledMeals = AppConstants.defaultMealTypes
+        .where((m) => family.settings.enabledMeals.contains(m))
         .toList();
 
     if (enabledMeals.isEmpty) {
@@ -523,7 +524,7 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            'Activez au moins un repas principal (Diner ou Souper) pour configurer la semaine type.',
+            'Activez au moins un repas pour configurer la semaine type.',
             style: TextStyle(color: context.colorTextHint),
           ),
         ),
@@ -626,7 +627,18 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
 
   Widget _buildNotificationSettings(Family family) {
     final settings = family.settings;
-    final reminderOptions = [30, 60, 120, 180, 240]; // minutes
+    // Options: 30min, 1h, 2h, 4h, 1 jour, 2 jours, 3 jours, 1 semaine, 2 semaines
+    final reminderOptions = [
+      30,          // 30 min
+      60,          // 1 heure
+      120,         // 2 heures
+      240,         // 4 heures
+      1440,        // 1 jour (24h)
+      2880,        // 2 jours
+      4320,        // 3 jours
+      10080,       // 1 semaine
+      20160,       // 2 semaines
+    ];
 
     return Card(
       child: Column(
@@ -655,10 +667,21 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
 
   String _formatMinutes(int minutes) {
     if (minutes < 60) return '$minutes min';
-    final hours = minutes ~/ 60;
-    final mins = minutes % 60;
-    if (mins == 0) return '$hours h';
-    return '$hours h $mins min';
+    if (minutes < 1440) {
+      // Less than a day, show hours
+      final hours = minutes ~/ 60;
+      final mins = minutes % 60;
+      if (mins == 0) return '$hours h';
+      return '$hours h $mins min';
+    }
+    if (minutes < 10080) {
+      // Less than a week, show days
+      final days = minutes ~/ 1440;
+      return '$days jour${days > 1 ? 's' : ''}';
+    }
+    // Weeks
+    final weeks = minutes ~/ 10080;
+    return '$weeks semaine${weeks > 1 ? 's' : ''}';
   }
 
   Future<void> _toggleNotifications(Family family, bool enabled) async {

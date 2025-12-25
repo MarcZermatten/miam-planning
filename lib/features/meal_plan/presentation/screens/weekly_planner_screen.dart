@@ -156,13 +156,19 @@ class WeeklyPlannerScreen extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Card(
-      color: isToday ? AppColors.primary.withValues(alpha: 0.1) : null,
+      color: isToday ? (isDark ? AppColors.darkPrimary.withValues(alpha: 0.2) : AppColors.primary.withValues(alpha: 0.1)) : null,
       child: ExpansionTile(
         initiallyExpanded: isToday,
         leading: CircleAvatar(
-          backgroundColor: isToday ? AppColors.primary : AppColors.surfaceVariant,
-          foregroundColor: isToday ? Colors.white : AppColors.textPrimary,
+          backgroundColor: isToday
+              ? (isDark ? AppColors.darkPrimary : AppColors.primary)
+              : (isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant),
+          foregroundColor: isToday
+              ? Colors.white
+              : (isDark ? AppColors.darkTextPrimary : AppColors.textPrimary),
           child: Text('${day.day}'),
         ),
         title: Text(
@@ -229,17 +235,18 @@ class WeeklyPlannerScreen extends ConsumerWidget {
     MealAssignment? assignment,
   ) {
     final hasAssignment = assignment != null && assignment.isNotEmpty;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
         color: hasAssignment
-            ? AppColors.primaryMedium.withValues(alpha: 0.08)
-            : AppColors.surfaceVariant.withValues(alpha: 0.5),
+            ? (isDark ? AppColors.darkPrimary.withValues(alpha: 0.15) : AppColors.primaryMedium.withValues(alpha: 0.08))
+            : (isDark ? AppColors.darkSurfaceVariant.withValues(alpha: 0.5) : AppColors.surfaceVariant.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: hasAssignment
-              ? AppColors.primaryMedium.withValues(alpha: 0.3)
+              ? (isDark ? AppColors.darkPrimary.withValues(alpha: 0.4) : AppColors.primaryMedium.withValues(alpha: 0.3))
               : Colors.transparent,
           width: 1,
         ),
@@ -251,7 +258,9 @@ class WeeklyPlannerScreen extends ConsumerWidget {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: hasAssignment ? AppColors.primaryMedium : AppColors.textHint.withValues(alpha: 0.3),
+            color: hasAssignment
+                ? (isDark ? AppColors.darkPrimaryDark : AppColors.primaryMedium)
+                : (isDark ? AppColors.darkTextHint.withValues(alpha: 0.3) : AppColors.textHint.withValues(alpha: 0.3)),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
@@ -268,7 +277,11 @@ class WeeklyPlannerScreen extends ConsumerWidget {
             ),
             if (hasAssignment) ...[
               const SizedBox(width: 8),
-              _buildNutritionalIndicators(assignment),
+              Icon(
+                Icons.check_circle,
+                size: 16,
+                color: AppColors.success,
+              ),
             ],
           ],
         ),
@@ -279,7 +292,9 @@ class WeeklyPlannerScreen extends ConsumerWidget {
           style: TextStyle(
             fontSize: 14,
             fontWeight: hasAssignment ? FontWeight.w600 : FontWeight.normal,
-            color: hasAssignment ? AppColors.textPrimary : AppColors.textHint,
+            color: hasAssignment
+                ? (isDark ? AppColors.darkTextPrimary : AppColors.textPrimary)
+                : (isDark ? AppColors.darkTextHint : AppColors.textHint),
           ),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -319,59 +334,6 @@ class WeeklyPlannerScreen extends ConsumerWidget {
             _showRecipeSelector(context, ref, day, mealType, null);
           }
         },
-      ),
-    );
-  }
-
-  /// Build nutritional indicators (vegetable, starch, protein)
-  Widget _buildNutritionalIndicators(MealAssignment assignment) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildNutrientBadge(
-          '🥦',
-          assignment.hasVegetable,
-          AppColors.vegetables,
-          'Legume',
-        ),
-        const SizedBox(width: 4),
-        _buildNutrientBadge(
-          '🍝',
-          assignment.hasStarch,
-          AppColors.grains,
-          'Feculent',
-        ),
-        const SizedBox(width: 4),
-        _buildNutrientBadge(
-          '🥩',
-          assignment.hasProtein,
-          AppColors.protein,
-          'Proteine',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNutrientBadge(String emoji, bool isPresent, Color color, String tooltip) {
-    return Tooltip(
-      message: isPresent ? '$tooltip present' : '$tooltip manquant',
-      child: Container(
-        width: 20,
-        height: 20,
-        decoration: BoxDecoration(
-          color: isPresent ? color : Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(4),
-          border: isPresent ? null : Border.all(color: Colors.grey.shade400, width: 0.5),
-        ),
-        child: Center(
-          child: Text(
-            emoji,
-            style: TextStyle(
-              fontSize: 12,
-              color: isPresent ? null : Colors.grey.shade400,
-            ),
-          ),
-        ),
       ),
     );
   }
