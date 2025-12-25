@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' hide Family;
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/providers/theme_provider.dart';
@@ -752,10 +753,19 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
   }
 
   void _showInviteDialog(String code) {
+    final familyAsync = ref.read(currentFamilyProvider);
+    final familyName = familyAsync.value?.name ?? 'MiamPlanning';
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Inviter un membre'),
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.person_add, color: AppColors.primary),
+            const SizedBox(width: 8),
+            const Text('Inviter un membre'),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -770,32 +780,100 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
               child: SelectableText(
                 code,
                 style: const TextStyle(
-                  fontSize: 24,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 4,
+                  letterSpacing: 6,
                 ),
+                textAlign: TextAlign.center,
               ),
+            ),
+            const SizedBox(height: 16),
+            // Action buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Copy button
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: code));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Code copie!'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.copy, size: 18),
+                  label: const Text('Copier'),
+                ),
+                const SizedBox(width: 12),
+                // Share button
+                ElevatedButton.icon(
+                  onPressed: () {
+                    SharePlus.instance.share(
+                      ShareParams(
+                        text: 'Rejoins notre famille "$familyName" sur MiamPlanning!\n\n'
+                            'Code d\'invitation: $code\n\n'
+                            'Telecharge l\'app et entre ce code pour nous rejoindre.',
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.share, size: 18),
+                  label: const Text('Partager'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: code));
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Code copie!')),
-              );
+          // Regenerate code button
+          TextButton.icon(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await _regenerateInviteCode();
             },
-            child: const Text('Copier'),
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Nouveau code'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+            ),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Fermer'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _regenerateInviteCode() async {
+    final familyId = ref.read(currentFamilyIdProvider);
+    if (familyId == null) return;
+
+    try {
+      final newCode = await ref.read(familyRepositoryProvider).regenerateInviteCode(familyId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Nouveau code: $newCode'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        // Show dialog with new code
+        _showInviteDialog(newCode);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    }
   }
 
   void _showLeaveDialog(BuildContext context) {
