@@ -87,7 +87,9 @@ class RecipeRating {
 /// Recipe model
 class Recipe {
   final String id;
+  final String? dishId; // Link to parent dish (null for legacy recipes)
   final String title;
+  final String? variantName; // e.g., "Recette de maman", "Version rapide"
   final String? description;
   final String? imageUrl;
   final String? sourceUrl;
@@ -109,7 +111,9 @@ class Recipe {
 
   Recipe({
     required this.id,
+    this.dishId,
     required this.title,
+    this.variantName,
     this.description,
     this.imageUrl,
     this.sourceUrl,
@@ -130,11 +134,16 @@ class Recipe {
     this.lastCookedAt,
   });
 
+  /// Display name: variant name if set, otherwise title
+  String get displayName => variantName ?? title;
+
   factory Recipe.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return Recipe(
       id: doc.id,
+      dishId: data['dishId'],
       title: data['title'] ?? '',
+      variantName: data['variantName'],
       description: data['description'],
       imageUrl: data['imageUrl'],
       sourceUrl: data['sourceUrl'],
@@ -164,7 +173,9 @@ class Recipe {
 
   Map<String, dynamic> toFirestore() {
     return {
+      'dishId': dishId,
       'title': title,
+      'variantName': variantName,
       'description': description,
       'imageUrl': imageUrl,
       'sourceUrl': sourceUrl,
@@ -216,7 +227,9 @@ class Recipe {
   }
 
   Recipe copyWith({
+    String? dishId,
     String? title,
+    String? variantName,
     String? description,
     String? imageUrl,
     String? sourceUrl,
@@ -236,7 +249,9 @@ class Recipe {
   }) {
     return Recipe(
       id: id,
+      dishId: dishId ?? this.dishId,
       title: title ?? this.title,
+      variantName: variantName ?? this.variantName,
       description: description ?? this.description,
       imageUrl: imageUrl ?? this.imageUrl,
       sourceUrl: sourceUrl ?? this.sourceUrl,

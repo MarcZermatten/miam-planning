@@ -1,31 +1,169 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// A single meal assignment
-class MealAssignment {
-  final String recipeId;
-  final String recipeTitle;
+/// A single dish assignment within a meal
+class DishAssignment {
+  final String dishId;
+  final String dishName;
+  final String? recipeId;
+  final String? recipeName;
+  final bool fromFreezer;
+  final int portionsUsed;
   final String? note;
 
-  MealAssignment({
-    required this.recipeId,
-    required this.recipeTitle,
+  DishAssignment({
+    required this.dishId,
+    required this.dishName,
+    this.recipeId,
+    this.recipeName,
+    this.fromFreezer = false,
+    this.portionsUsed = 1,
     this.note,
   });
 
-  factory MealAssignment.fromMap(Map<String, dynamic> map) {
-    return MealAssignment(
-      recipeId: map['recipeId'] ?? '',
-      recipeTitle: map['recipeTitle'] ?? '',
+  factory DishAssignment.fromMap(Map<String, dynamic> map) {
+    return DishAssignment(
+      dishId: map['dishId'] ?? '',
+      dishName: map['dishName'] ?? '',
+      recipeId: map['recipeId'],
+      recipeName: map['recipeName'],
+      fromFreezer: map['fromFreezer'] ?? false,
+      portionsUsed: map['portionsUsed'] ?? 1,
       note: map['note'],
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'dishId': dishId,
+      'dishName': dishName,
       'recipeId': recipeId,
-      'recipeTitle': recipeTitle,
+      'recipeName': recipeName,
+      'fromFreezer': fromFreezer,
+      'portionsUsed': portionsUsed,
       'note': note,
     };
+  }
+
+  DishAssignment copyWith({
+    String? dishId,
+    String? dishName,
+    String? recipeId,
+    String? recipeName,
+    bool? fromFreezer,
+    int? portionsUsed,
+    String? note,
+  }) {
+    return DishAssignment(
+      dishId: dishId ?? this.dishId,
+      dishName: dishName ?? this.dishName,
+      recipeId: recipeId ?? this.recipeId,
+      recipeName: recipeName ?? this.recipeName,
+      fromFreezer: fromFreezer ?? this.fromFreezer,
+      portionsUsed: portionsUsed ?? this.portionsUsed,
+      note: note ?? this.note,
+    );
+  }
+}
+
+/// A meal assignment containing one or more dishes
+class MealAssignment {
+  final List<DishAssignment> dishes;
+  final String? note;
+
+  MealAssignment({
+    this.dishes = const [],
+    this.note,
+  });
+
+  /// Legacy constructor for backward compatibility
+  factory MealAssignment.legacy({
+    required String recipeId,
+    required String recipeTitle,
+    String? note,
+  }) {
+    return MealAssignment(
+      dishes: [
+        DishAssignment(
+          dishId: recipeId, // Use recipeId as dishId for legacy data
+          dishName: recipeTitle,
+          recipeId: recipeId,
+          recipeName: recipeTitle,
+        ),
+      ],
+      note: note,
+    );
+  }
+
+  factory MealAssignment.fromMap(Map<String, dynamic> map) {
+    // Handle legacy format (single recipe)
+    if (map.containsKey('recipeId') && !map.containsKey('dishes')) {
+      return MealAssignment.legacy(
+        recipeId: map['recipeId'] ?? '',
+        recipeTitle: map['recipeTitle'] ?? '',
+        note: map['note'],
+      );
+    }
+
+    // New format with dishes array
+    return MealAssignment(
+      dishes: (map['dishes'] as List<dynamic>?)
+              ?.map((e) => DishAssignment.fromMap(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      note: map['note'],
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'dishes': dishes.map((d) => d.toMap()).toList(),
+      'note': note,
+    };
+  }
+
+  /// Check if this meal has any dishes assigned
+  bool get isEmpty => dishes.isEmpty;
+  bool get isNotEmpty => dishes.isNotEmpty;
+
+  /// Get the first dish (for simple display)
+  DishAssignment? get firstDish => dishes.isNotEmpty ? dishes.first : null;
+
+  /// Legacy getters for backward compatibility
+  String get recipeId => dishes.isNotEmpty ? (dishes.first.recipeId ?? dishes.first.dishId) : '';
+  String get recipeTitle => dishes.isNotEmpty ? dishes.first.dishName : '';
+
+  /// Add a dish to this meal
+  MealAssignment addDish(DishAssignment dish) {
+    return MealAssignment(
+      dishes: [...dishes, dish],
+      note: note,
+    );
+  }
+
+  /// Remove a dish from this meal
+  MealAssignment removeDish(String dishId) {
+    return MealAssignment(
+      dishes: dishes.where((d) => d.dishId != dishId).toList(),
+      note: note,
+    );
+  }
+
+  /// Update a dish in this meal
+  MealAssignment updateDish(String dishId, DishAssignment updated) {
+    return MealAssignment(
+      dishes: dishes.map((d) => d.dishId == dishId ? updated : d).toList(),
+      note: note,
+    );
+  }
+
+  MealAssignment copyWith({
+    List<DishAssignment>? dishes,
+    String? note,
+  }) {
+    return MealAssignment(
+      dishes: dishes ?? this.dishes,
+      note: note ?? this.note,
+    );
   }
 }
 

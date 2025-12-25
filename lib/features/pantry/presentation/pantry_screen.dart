@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/data/auth_repository.dart';
 import '../../family/data/family_repository.dart';
+import '../../dishes/data/dish_repository.dart';
+import '../../dishes/domain/dish.dart';
 import '../data/pantry_repository.dart';
 import '../domain/pantry_item.dart';
 
@@ -20,7 +23,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -33,6 +36,12 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
   Widget build(BuildContext context) {
     final pantryItems = ref.watch(pantryItemsProvider);
     final suggestions = ref.watch(suggestedRecipesProvider);
+    final frozenDishes = ref.watch(frozenDishesProvider);
+    final frozenCount = frozenDishes.when(
+      data: (dishes) => dishes.fold<int>(0, (sum, d) => sum + d.frozenPortions),
+      loading: () => 0,
+      error: (_, __) => 0,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -40,13 +49,17 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
         bottom: TabBar(
           controller: _tabController,
           tabs: [
-            Tab(
-              icon: const Icon(Icons.kitchen),
+            const Tab(
+              icon: Icon(Icons.kitchen),
               text: 'Ingredients',
             ),
             Tab(
+              icon: const Icon(Icons.ac_unit),
+              text: 'Congelo${frozenCount > 0 ? ' ($frozenCount)' : ''}',
+            ),
+            Tab(
               icon: const Icon(Icons.lightbulb_outline),
-              text: 'Suggestions (${suggestions.length})',
+              text: 'Idees (${suggestions.length})',
             ),
           ],
         ),
@@ -85,7 +98,15 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                 ? _buildEmptyState()
                 : _buildIngredientsList(items),
           ),
-          // Tab 2: Recipe suggestions
+          // Tab 2: Freezer (Congelo)
+          frozenDishes.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('Erreur: $e')),
+            data: (dishes) => dishes.isEmpty
+                ? _buildEmptyFreezerState()
+                : _buildFreezerList(dishes),
+          ),
+          // Tab 3: Recipe suggestions
           suggestions.isEmpty
               ? _buildNoSuggestionsState()
               : _buildSuggestionsList(suggestions),
@@ -265,6 +286,353 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
         ],
       ),
     );
+  }
+
+  // ===== FREEZER TAB =====
+
+  Widget _buildEmptyFreezerState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.ac_unit,
+            size: 64,
+            color: AppColors.textHint,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Congelateur vide',
+            style: TextStyle(
+              fontSize: 18,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Ajoutez des plats prepares que vous avez congeles',
+            style: TextStyle(color: AppColors.textHint),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _showAddFreezerDialog,
+            icon: const Icon(Icons.add),
+            label: const Text('Ajouter un plat'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFreezerList(List<Dish> dishes) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: dishes.length + 1, // +1 for add button
+      itemBuilder: (context, index) {
+        if (index == dishes.length) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: OutlinedButton.icon(
+              onPressed: _showAddFreezerDialog,
+              icon: const Icon(Icons.add),
+              label: const Text('Ajouter un plat'),
+            ),
+          );
+        }
+        return _buildFreezerDishCard(dishes[index]);
+      },
+    );
+  }
+
+  Widget _buildFreezerDishCard(Dish dish) {
+    final daysInFreezer = dish.frozenAt != null
+        ? DateTime.now().difference(dish.frozenAt!).inDays
+        : null;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Icon/Image
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.info.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: dish.imageUrl != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            dish.imageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.ac_unit,
+                              color: AppColors.info,
+                            ),
+                          ),
+                        )
+                      : const Icon(Icons.ac_unit, color: AppColors.info),
+                ),
+                const SizedBox(width: 12),
+                // Name and category
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        dish.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        dish.categoriesDisplay,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Portions badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryMedium,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.restaurant, color: Colors.white, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${dish.frozenPortions}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Actions row
+            Row(
+              children: [
+                // Days in freezer
+                if (daysInFreezer != null)
+                  Text(
+                    'Congele il y a $daysInFreezer jours',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                const Spacer(),
+                // Remove portion button
+                TextButton.icon(
+                  onPressed: () => _useFreezerPortion(dish),
+                  icon: const Icon(Icons.remove_circle_outline, size: 18),
+                  label: const Text('Utiliser'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+                // Add portion button
+                TextButton.icon(
+                  onPressed: () => _addFreezerPortion(dish),
+                  icon: const Icon(Icons.add_circle_outline, size: 18),
+                  label: const Text('Ajouter'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.success,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddFreezerDialog() {
+    final nameController = TextEditingController();
+    int portions = 1;
+    List<DishCategory> selectedCategories = [];
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Ajouter au congelateur'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Nom du plat *',
+                    hintText: 'Ex: Lasagnes bolognaise',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Categories',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: DishCategory.values.map((category) {
+                    final isSelected = selectedCategories.contains(category);
+                    return FilterChip(
+                      label: Text('${category.icon} ${category.label}'),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        setDialogState(() {
+                          if (selected) {
+                            selectedCategories.add(category);
+                          } else {
+                            selectedCategories.remove(category);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Text(
+                      'Portions: ',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: portions > 1
+                          ? () => setDialogState(() => portions--)
+                          : null,
+                    ),
+                    Text(
+                      '$portions',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: () => setDialogState(() => portions++),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.trim().isEmpty) return;
+                Navigator.pop(context);
+
+                final familyId = ref.read(currentFamilyIdProvider);
+                if (familyId == null) return;
+
+                final userId = ref.read(currentUserProvider)?.uid ?? '';
+
+                // Create dish with frozen portions
+                final dish = await ref.read(dishRepositoryProvider).createDish(
+                      familyId: familyId,
+                      name: nameController.text.trim(),
+                      createdBy: userId,
+                      categories: selectedCategories.isNotEmpty
+                          ? selectedCategories
+                          : [DishCategory.complete],
+                    );
+                // Update with frozen portions
+                final updated = dish.copyWith(
+                  isFrozen: true,
+                  frozenPortions: portions,
+                  frozenAt: DateTime.now(),
+                );
+                await ref.read(dishRepositoryProvider).updateDish(familyId, updated);
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('$portions portion(s) ajoutee(s) au congelateur'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Ajouter'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _useFreezerPortion(Dish dish) async {
+    final familyId = ref.read(currentFamilyIdProvider);
+    if (familyId == null) return;
+
+    await ref.read(dishRepositoryProvider).useFromFreezer(
+          familyId: familyId,
+          dishId: dish.id,
+          portions: 1,
+        );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('1 portion de ${dish.name} utilisee'),
+          action: SnackBarAction(
+            label: 'Annuler',
+            onPressed: () => _addFreezerPortion(dish),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _addFreezerPortion(Dish dish) async {
+    final familyId = ref.read(currentFamilyIdProvider);
+    if (familyId == null) return;
+
+    await ref.read(dishRepositoryProvider).addToFreezer(
+          familyId: familyId,
+          dishId: dish.id,
+          portions: 1,
+        );
   }
 
   Widget _buildSuggestionsList(List<RecipeSuggestion> suggestions) {

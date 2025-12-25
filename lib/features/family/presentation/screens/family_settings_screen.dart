@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' hide Family;
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/providers/theme_provider.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/services/meal_reminder_service.dart';
 import '../../../../routing/app_router.dart';
@@ -79,6 +80,12 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
               ),
               const SizedBox(height: 24),
 
+              // Appearance settings
+              _buildSectionTitle('Apparence'),
+              const SizedBox(height: 8),
+              _buildAppearanceSettings(),
+              const SizedBox(height: 24),
+
               // Meal settings
               _buildSectionTitle('Repas a planifier'),
               const SizedBox(height: 8),
@@ -115,6 +122,59 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: isError ? AppColors.error : null,
+      ),
+    );
+  }
+
+  Widget _buildAppearanceSettings() {
+    final themeMode = ref.watch(themeModeProvider);
+    final themeNotifier = ref.read(themeModeProvider.notifier);
+
+    return Card(
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(
+              themeMode == ThemeMode.dark ? Icons.dark_mode : Icons.light_mode,
+              color: themeMode == ThemeMode.dark
+                  ? AppColors.darkPrimary
+                  : AppColors.primaryMedium,
+            ),
+            title: const Text('Theme'),
+            subtitle: Text(
+              themeMode == ThemeMode.dark
+                  ? 'Mode sombre'
+                  : themeMode == ThemeMode.light
+                      ? 'Mode clair'
+                      : 'Automatique (systeme)',
+            ),
+            trailing: SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  icon: Icon(Icons.light_mode, size: 18),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  icon: Icon(Icons.brightness_auto, size: 18),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  icon: Icon(Icons.dark_mode, size: 18),
+                ),
+              ],
+              selected: {themeMode},
+              onSelectionChanged: (Set<ThemeMode> selection) {
+                themeNotifier.setThemeMode(selection.first);
+              },
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
