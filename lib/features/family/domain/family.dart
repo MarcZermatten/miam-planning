@@ -60,16 +60,22 @@ class Family {
 class FamilySettings {
   final List<String> enabledMeals;
   final int weekStartDay; // 1 = Monday, 7 = Sunday
+  final bool notificationsEnabled;
+  final int reminderMinutesBefore; // Minutes before meal to send reminder
 
   FamilySettings({
     List<String>? enabledMeals,
     this.weekStartDay = 1,
+    this.notificationsEnabled = false,
+    this.reminderMinutesBefore = 60, // Default: 1 hour before
   }) : enabledMeals = enabledMeals ?? ['lunch', 'dinner'];
 
   factory FamilySettings.fromMap(Map<String, dynamic> map) {
     return FamilySettings(
       enabledMeals: List<String>.from(map['enabledMeals'] ?? ['lunch', 'dinner']),
       weekStartDay: map['weekStartDay'] ?? 1,
+      notificationsEnabled: map['notificationsEnabled'] ?? false,
+      reminderMinutesBefore: map['reminderMinutesBefore'] ?? 60,
     );
   }
 
@@ -77,16 +83,22 @@ class FamilySettings {
     return {
       'enabledMeals': enabledMeals,
       'weekStartDay': weekStartDay,
+      'notificationsEnabled': notificationsEnabled,
+      'reminderMinutesBefore': reminderMinutesBefore,
     };
   }
 
   FamilySettings copyWith({
     List<String>? enabledMeals,
     int? weekStartDay,
+    bool? notificationsEnabled,
+    int? reminderMinutesBefore,
   }) {
     return FamilySettings(
       enabledMeals: enabledMeals ?? this.enabledMeals,
       weekStartDay: weekStartDay ?? this.weekStartDay,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      reminderMinutesBefore: reminderMinutesBefore ?? this.reminderMinutesBefore,
     );
   }
 }

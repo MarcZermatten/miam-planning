@@ -58,6 +58,7 @@ dependencies:
   html: ^0.15.5
   google_sign_in: 6.2.2
   google_sign_in_dartio: ^0.3.0
+  flutter_local_notifications: ^19.5.0
 
 dev_dependencies:
   flutter_test:

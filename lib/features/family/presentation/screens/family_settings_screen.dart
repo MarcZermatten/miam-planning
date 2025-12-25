@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' hide Family;
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/meal_reminder_service.dart';
 import '../../../../routing/app_router.dart';
 import '../../../auth/data/auth_repository.dart';
 import '../../data/family_repository.dart';
@@ -81,6 +83,12 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
               _buildSectionTitle('Repas a planifier'),
               const SizedBox(height: 8),
               _buildMealSettings(family),
+              const SizedBox(height: 24),
+
+              // Notification settings
+              _buildSectionTitle('Notifications'),
+              const SizedBox(height: 8),
+              _buildNotificationSettings(family),
               const SizedBox(height: 24),
 
               // Danger zone
@@ -416,6 +424,119 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
         }).toList(),
       ),
     );
+  }
+
+  Widget _buildNotificationSettings(Family family) {
+    final settings = family.settings;
+    final reminderOptions = [30, 60, 120, 180, 240]; // minutes
+
+    return Card(
+      child: Column(
+        children: [
+          SwitchListTile(
+            value: settings.notificationsEnabled,
+            onChanged: (value) => _toggleNotifications(family, value),
+            title: const Text('Activer les rappels'),
+            subtitle: const Text('Recevoir une notification si un repas n\'est pas planifie'),
+            secondary: const Icon(Icons.notifications_outlined),
+          ),
+          if (settings.notificationsEnabled) ...[
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.timer_outlined),
+              title: const Text('Rappeler avant le repas'),
+              subtitle: Text(_formatMinutes(settings.reminderMinutesBefore)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showReminderTimePicker(family, reminderOptions),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatMinutes(int minutes) {
+    if (minutes < 60) return '$minutes min';
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    if (mins == 0) return '$hours h';
+    return '$hours h $mins min';
+  }
+
+  Future<void> _toggleNotifications(Family family, bool enabled) async {
+    if (enabled) {
+      // Request permission first
+      final notificationService = ref.read(notificationServiceProvider);
+      await notificationService.initialize();
+      final granted = await notificationService.requestPermissions();
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Permission refusee pour les notifications')),
+          );
+        }
+        return;
+      }
+    }
+
+    final familyRepo = ref.read(familyRepositoryProvider);
+    await familyRepo.updateFamily(
+      family.id,
+      settings: family.settings.copyWith(notificationsEnabled: enabled),
+    );
+
+    // Schedule or cancel reminders
+    if (enabled) {
+      await ref.read(mealReminderServiceProvider).scheduleReminders();
+    } else {
+      await ref.read(notificationServiceProvider).cancelAllNotifications();
+    }
+  }
+
+  void _showReminderTimePicker(Family family, List<int> options) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rappeler combien de temps avant?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: options.map((minutes) {
+            final isSelected = family.settings.reminderMinutesBefore == minutes;
+            return ListTile(
+              title: Text(_formatMinutes(minutes)),
+              leading: Radio<int>(
+                value: minutes,
+                groupValue: family.settings.reminderMinutesBefore,
+                onChanged: (value) async {
+                  Navigator.pop(context);
+                  if (value != null) {
+                    await _updateReminderTime(family, value);
+                  }
+                },
+              ),
+              selected: isSelected,
+              onTap: () async {
+                Navigator.pop(context);
+                await _updateReminderTime(family, minutes);
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateReminderTime(Family family, int minutes) async {
+    final familyRepo = ref.read(familyRepositoryProvider);
+    await familyRepo.updateFamily(
+      family.id,
+      settings: family.settings.copyWith(reminderMinutesBefore: minutes),
+    );
+
+    // Reschedule reminders with new time
+    if (family.settings.notificationsEnabled) {
+      await ref.read(mealReminderServiceProvider).scheduleReminders();
+    }
   }
 
   Future<void> _toggleMeal(Family family, String mealType, bool enabled) async {
