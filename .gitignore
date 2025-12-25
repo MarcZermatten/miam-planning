@@ -50,3 +50,4 @@ android/nul
 .env
 .env.*
 lib/core/config/google_auth_config_local.dart
+lib/core/config/api_keys_local.dart

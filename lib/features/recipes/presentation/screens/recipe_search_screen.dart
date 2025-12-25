@@ -17,7 +17,7 @@ class RecipeSearchScreen extends ConsumerStatefulWidget {
 class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
   final _searchController = TextEditingController();
   List<RecipeSearchResult> _results = [];
-  RecipeProvider _selectedProvider = RecipeProvider.bettyBossi;
+  RecipeProvider _selectedProvider = RecipeProvider.spoonacular;
   bool _isLoading = false;
   bool _hasSearched = false;
   String? _importingUrl;
@@ -182,16 +182,26 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: SegmentedButton<RecipeProvider>(
               segments: RecipeProvider.values.map((provider) {
+                final isAvailable = provider.isAvailable;
                 return ButtonSegment<RecipeProvider>(
                   value: provider,
-                  label: Text(provider.label),
+                  label: Text(
+                    isAvailable ? provider.label : '${provider.label} (bientôt)',
+                    style: TextStyle(
+                      color: isAvailable ? null : AppColors.textHint,
+                      fontSize: isAvailable ? null : 12,
+                    ),
+                  ),
                   icon: Text(provider.icon),
+                  enabled: isAvailable,
                 );
               }).toList(),
               selected: {_selectedProvider},
               onSelectionChanged: (Set<RecipeProvider> selected) {
+                final provider = selected.first;
+                if (!provider.isAvailable) return;
                 setState(() {
-                  _selectedProvider = selected.first;
+                  _selectedProvider = provider;
                 });
                 // Re-search if we have a query
                 if (_searchController.text.trim().isNotEmpty && _hasSearched) {
@@ -587,6 +597,8 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
 
   Color _getSourceColor(RecipeProvider provider) {
     switch (provider) {
+      case RecipeProvider.spoonacular:
+        return Colors.green;
       case RecipeProvider.marmiton:
         return Colors.orange;
       case RecipeProvider.bettyBossi:

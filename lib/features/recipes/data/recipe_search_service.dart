@@ -1,45 +1,75 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
+import '../../../core/config/api_keys.dart';
 
 /// Recipe search providers
 enum RecipeProvider {
-  bettyBossi,
+  spoonacular,
   marmiton,
   cuisineAz,
+  bettyBossi, // En développement - nécessite backend Python
 }
 
 extension RecipeProviderExtension on RecipeProvider {
   String get label {
     switch (this) {
+      case RecipeProvider.spoonacular:
+        return 'Spoonacular';
       case RecipeProvider.marmiton:
         return 'Marmiton';
-      case RecipeProvider.bettyBossi:
-        return 'Betty Bossi';
       case RecipeProvider.cuisineAz:
         return 'Cuisine AZ';
+      case RecipeProvider.bettyBossi:
+        return 'Betty Bossi';
     }
   }
 
   String get baseUrl {
     switch (this) {
+      case RecipeProvider.spoonacular:
+        return 'https://api.spoonacular.com';
       case RecipeProvider.marmiton:
         return 'https://www.marmiton.org';
-      case RecipeProvider.bettyBossi:
-        return 'https://www.bettybossi.ch';
       case RecipeProvider.cuisineAz:
         return 'https://www.cuisineaz.com';
+      case RecipeProvider.bettyBossi:
+        return 'https://www.bettybossi.ch';
     }
   }
 
   String get icon {
     switch (this) {
+      case RecipeProvider.spoonacular:
+        return '🥄';
       case RecipeProvider.marmiton:
         return '🇫🇷';
-      case RecipeProvider.bettyBossi:
-        return '🇨🇭';
       case RecipeProvider.cuisineAz:
         return '🍳';
+      case RecipeProvider.bettyBossi:
+        return '🇨🇭';
+    }
+  }
+
+  /// Whether this provider is currently available
+  bool get isAvailable {
+    switch (this) {
+      case RecipeProvider.spoonacular:
+      case RecipeProvider.marmiton:
+      case RecipeProvider.cuisineAz:
+        return true;
+      case RecipeProvider.bettyBossi:
+        return false; // En développement
+    }
+  }
+
+  /// Status message for unavailable providers
+  String? get statusMessage {
+    switch (this) {
+      case RecipeProvider.bettyBossi:
+        return 'En développement';
+      default:
+        return null;
     }
   }
 }
@@ -67,6 +97,7 @@ class RecipeSearchResult {
 
 /// Service for searching recipes across multiple providers
 class RecipeSearchService {
+
   static const _headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -80,13 +111,64 @@ class RecipeSearchService {
     RecipeProvider provider, {
     int maxResults = 20,
   }) async {
+    // Check if provider is available
+    if (!provider.isAvailable) {
+      return [];
+    }
+
     switch (provider) {
+      case RecipeProvider.spoonacular:
+        return _searchSpoonacular(query, maxResults);
       case RecipeProvider.marmiton:
         return _searchMarmiton(query, maxResults);
-      case RecipeProvider.bettyBossi:
-        return _searchBettyBossi(query, maxResults);
       case RecipeProvider.cuisineAz:
         return _searchCuisineAz(query, maxResults);
+      case RecipeProvider.bettyBossi:
+        return []; // En développement
+    }
+  }
+
+  /// Search Spoonacular API
+  static Future<List<RecipeSearchResult>> _searchSpoonacular(
+    String query,
+    int maxResults,
+  ) async {
+    try {
+      final encodedQuery = Uri.encodeComponent(query);
+      final url = 'https://api.spoonacular.com/recipes/complexSearch'
+          '?apiKey=$spoonacularApiKey'
+          '&query=$encodedQuery'
+          '&number=$maxResults'
+          '&addRecipeInformation=true'
+          '&fillIngredients=false'
+          '&instructionsRequired=true';
+
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode != 200) {
+        print('Spoonacular API error: ${response.statusCode} - ${response.body}');
+        return [];
+      }
+
+      final data = json.decode(response.body);
+      final results = <RecipeSearchResult>[];
+
+      for (final recipe in data['results'] ?? []) {
+        results.add(RecipeSearchResult(
+          title: recipe['title'] ?? '',
+          url: recipe['sourceUrl'] ?? 'https://spoonacular.com/recipes/${recipe['id']}',
+          imageUrl: recipe['image'],
+          prepTime: recipe['readyInMinutes'],
+          rating: recipe['spoonacularScore'] != null
+              ? (recipe['spoonacularScore'] / 20).round() // Convert 0-100 to 0-5
+              : null,
+          provider: RecipeProvider.spoonacular,
+        ));
+      }
+
+      return results;
+    } catch (e) {
+      print('Spoonacular search error: $e');
+      return [];
     }
   }
 
