@@ -7,6 +7,7 @@ import '../../../auth/data/auth_repository.dart';
 import '../../../family/data/family_repository.dart';
 import '../../data/recipe_repository.dart';
 import '../../data/recipe_scraper.dart';
+import '../../data/recipe_search_service.dart';
 import '../../domain/recipe.dart';
 
 class AddRecipeScreen extends ConsumerStatefulWidget {
@@ -21,6 +22,7 @@ class _AddRecipeScreenState extends ConsumerState<AddRecipeScreen>
   late TabController _tabController;
   final _formKey = GlobalKey<FormState>();
   final _urlController = TextEditingController();
+  final _searchController = TextEditingController();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _prepTimeController = TextEditingController();
@@ -33,19 +35,25 @@ class _AddRecipeScreenState extends ConsumerState<AddRecipeScreen>
   List<String> _selectedAllergens = [];
   List<int> _kidCanHelpSteps = [];
   bool _isLoading = false;
+  bool _isSearching = false;
   String? _sourceUrl;
   String? _imageUrl;
+
+  // Search
+  RecipeProvider _selectedProvider = RecipeProvider.marmiton;
+  List<RecipeSearchResult> _searchResults = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _urlController.dispose();
+    _searchController.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
     _prepTimeController.dispose();
@@ -137,21 +145,222 @@ class _AddRecipeScreenState extends ConsumerState<AddRecipeScreen>
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(text: 'Importer URL'),
-            Tab(text: 'Saisie manuelle'),
+            Tab(icon: Icon(Icons.search), text: 'Recherche'),
+            Tab(icon: Icon(Icons.link), text: 'URL'),
+            Tab(icon: Icon(Icons.edit), text: 'Manuelle'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Import from URL (TODO: implement later)
+          // Search recipes online
+          _buildSearchTab(),
+          // Import from URL
           _buildUrlImportTab(),
           // Manual entry
           _buildManualEntryTab(),
         ],
       ),
     );
+  }
+
+  Widget _buildSearchTab() {
+    return Column(
+      children: [
+        // Provider selector
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Source',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: context.colorTextSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<RecipeProvider>(
+                segments: RecipeProvider.values.map((p) {
+                  return ButtonSegment(
+                    value: p,
+                    label: Text(p.label),
+                    icon: Text(p.icon),
+                  );
+                }).toList(),
+                selected: {_selectedProvider},
+                onSelectionChanged: (selected) {
+                  setState(() {
+                    _selectedProvider = selected.first;
+                    _searchResults = [];
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              // Search field
+              TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  labelText: 'Rechercher une recette',
+                  hintText: 'Ex: poulet curry, tarte pommes...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _isSearching
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.arrow_forward),
+                          onPressed: _performSearch,
+                        ),
+                ),
+                onSubmitted: (_) => _performSearch(),
+              ),
+            ],
+          ),
+        ),
+        // Results
+        Expanded(
+          child: _searchResults.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.restaurant_menu,
+                        size: 64,
+                        color: context.colorTextHint,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Recherchez des recettes sur ${_selectedProvider.label}',
+                        style: TextStyle(color: context.colorTextSecondary),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _searchResults.length,
+                  itemBuilder: (context, index) {
+                    final result = _searchResults[index];
+                    return _buildSearchResultCard(result);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchResultCard(RecipeSearchResult result) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: result.imageUrl != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  result.imageUrl!,
+                  width: 60,
+                  height: 60,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 60,
+                    height: 60,
+                    color: AppColors.surfaceVariant,
+                    child: const Icon(Icons.restaurant),
+                  ),
+                ),
+              )
+            : Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.restaurant),
+              ),
+        title: Text(
+          result.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: Row(
+          children: [
+            Text(result.provider.icon),
+            const SizedBox(width: 4),
+            Text(
+              result.provider.label,
+              style: TextStyle(
+                fontSize: 12,
+                color: context.colorTextHint,
+              ),
+            ),
+            if (result.prepTime != null) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.timer, size: 14, color: context.colorTextHint),
+              const SizedBox(width: 2),
+              Text(
+                '${result.prepTime} min',
+                style: TextStyle(fontSize: 12, color: context.colorTextHint),
+              ),
+            ],
+          ],
+        ),
+        trailing: ElevatedButton(
+          onPressed: () => _importFromSearchResult(result),
+          child: const Text('Importer'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _performSearch() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+      _searchResults = [];
+    });
+
+    try {
+      final results = await RecipeSearchService.search(query, _selectedProvider);
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+        });
+        if (results.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Aucune recette trouvee')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSearching = false);
+    }
+  }
+
+  Future<void> _importFromSearchResult(RecipeSearchResult result) async {
+    // Use the URL importer
+    _urlController.text = result.url;
+    await _importFromUrl();
   }
 
   Future<void> _importFromUrl() async {

@@ -17,7 +17,8 @@ class RecipeSearchScreen extends ConsumerStatefulWidget {
 
 class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
   final _searchController = TextEditingController();
-  List<ExternalRecipe> _results = [];
+  List<RecipeSearchResult> _results = [];
+  RecipeProvider _selectedProvider = RecipeProvider.marmiton;
   bool _isLoading = false;
   bool _hasSearched = false;
   String? _importingUrl;
@@ -38,7 +39,7 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
     });
 
     try {
-      final results = await RecipeSearchService.search(query);
+      final results = await RecipeSearchService.search(query, _selectedProvider);
       setState(() => _results = results);
     } catch (e) {
       if (mounted) {
@@ -51,7 +52,7 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
     }
   }
 
-  Future<void> _importRecipe(ExternalRecipe recipe) async {
+  Future<void> _importRecipe(RecipeSearchResult recipe) async {
     setState(() => _importingUrl = recipe.url);
 
     try {
@@ -87,7 +88,7 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
         instructions: scraped.instructions,
         sourceUrl: scraped.sourceUrl,
         imageUrl: scraped.imageUrl,
-        sourceName: recipe.source,
+        sourceName: recipe.provider.label,
       );
 
       if (mounted) {
@@ -159,18 +160,30 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
             ),
           ),
 
-          // Sources info
-          Padding(
+          // Provider selector tabs
+          Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: 16, color: AppColors.textSecondary),
-                const SizedBox(width: 8),
-                Text(
-                  'Recherche sur Marmiton et Betty Bossi',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                ),
-              ],
+            child: SegmentedButton<RecipeProvider>(
+              segments: RecipeProvider.values.map((provider) {
+                return ButtonSegment<RecipeProvider>(
+                  value: provider,
+                  label: Text(provider.label),
+                  icon: Text(provider.icon),
+                );
+              }).toList(),
+              selected: {_selectedProvider},
+              onSelectionChanged: (Set<RecipeProvider> selected) {
+                setState(() {
+                  _selectedProvider = selected.first;
+                });
+                // Re-search if we have a query
+                if (_searchController.text.trim().isNotEmpty && _hasSearched) {
+                  _search();
+                }
+              },
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+              ),
             ),
           ),
 
@@ -300,14 +313,14 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: _getSourceColor(recipe.source).withValues(alpha: 0.1),
+                                color: _getSourceColor(recipe.provider).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                recipe.source,
+                                recipe.provider.label,
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: _getSourceColor(recipe.source),
+                                  color: _getSourceColor(recipe.provider),
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -356,14 +369,14 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
     );
   }
 
-  Color _getSourceColor(String source) {
-    switch (source) {
-      case 'Marmiton':
+  Color _getSourceColor(RecipeProvider provider) {
+    switch (provider) {
+      case RecipeProvider.marmiton:
         return Colors.orange;
-      case 'Betty Bossi':
+      case RecipeProvider.bettyBossi:
         return Colors.red;
-      default:
-        return AppColors.primary;
+      case RecipeProvider.cuisineAz:
+        return Colors.blue;
     }
   }
 }
