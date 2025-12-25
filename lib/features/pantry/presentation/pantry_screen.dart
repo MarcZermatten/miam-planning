@@ -6,6 +6,8 @@ import '../../auth/data/auth_repository.dart';
 import '../../family/data/family_repository.dart';
 import '../../dishes/data/dish_repository.dart';
 import '../../dishes/domain/dish.dart';
+import '../../recipes/data/recipe_repository.dart';
+import '../../recipes/domain/recipe.dart';
 import '../data/pantry_repository.dart';
 import '../domain/pantry_item.dart';
 
@@ -484,126 +486,80 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
   }
 
   void _showAddFreezerDialog() {
-    final nameController = TextEditingController();
-    int portions = 1;
-    List<DishCategory> selectedCategories = [];
-
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Ajouter au congelateur'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: nameController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Nom du plat *',
-                    hintText: 'Ex: Lasagnes bolognaise',
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) {
+          return _AddFreezerSheet(
+            scrollController: scrollController,
+            onAddManual: (name, categories, portions) async {
+              Navigator.pop(context);
+              final familyId = ref.read(currentFamilyIdProvider);
+              if (familyId == null) return;
+
+              final userId = ref.read(currentUserProvider)?.uid ?? '';
+
+              await ref.read(dishRepositoryProvider).createDish(
+                    familyId: familyId,
+                    name: name,
+                    createdBy: userId,
+                    categories: categories.isNotEmpty ? categories : [DishCategory.complete],
+                    isFrozen: true,
+                    frozenPortions: portions,
+                  );
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('$portions portion(s) ajoutee(s) au congelateur'),
+                    backgroundColor: AppColors.success,
                   ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Categories',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: DishCategory.values.map((category) {
-                    final isSelected = selectedCategories.contains(category);
-                    return FilterChip(
-                      label: Text('${category.icon} ${category.label}'),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        setDialogState(() {
-                          if (selected) {
-                            selectedCategories.add(category);
-                          } else {
-                            selectedCategories.remove(category);
-                          }
-                        });
-                      },
+                );
+              }
+            },
+            onAddFromRecipe: (recipe, portions) async {
+              Navigator.pop(context);
+              final familyId = ref.read(currentFamilyIdProvider);
+              if (familyId == null) return;
+
+              final userId = ref.read(currentUserProvider)?.uid ?? '';
+
+              // Check if dish already exists for this recipe
+              if (recipe.dishId != null) {
+                // Add portions to existing dish
+                await ref.read(dishRepositoryProvider).addToFreezer(
+                      familyId: familyId,
+                      dishId: recipe.dishId!,
+                      portions: portions,
                     );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    const Text(
-                      'Portions: ',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      onPressed: portions > 1
-                          ? () => setDialogState(() => portions--)
-                          : null,
-                    ),
-                    Text(
-                      '$portions',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      onPressed: () => setDialogState(() => portions++),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.trim().isEmpty) return;
-                Navigator.pop(context);
-
-                final familyId = ref.read(currentFamilyIdProvider);
-                if (familyId == null) return;
-
-                final userId = ref.read(currentUserProvider)?.uid ?? '';
-
-                // Create dish directly with frozen portions
+              } else {
+                // Create new dish from recipe
                 await ref.read(dishRepositoryProvider).createDish(
                       familyId: familyId,
-                      name: nameController.text.trim(),
+                      name: recipe.title,
                       createdBy: userId,
-                      categories: selectedCategories.isNotEmpty
-                          ? selectedCategories
-                          : [DishCategory.complete],
+                      categories: [DishCategory.complete],
                       isFrozen: true,
                       frozenPortions: portions,
                     );
+              }
 
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('$portions portion(s) ajoutee(s) au congelateur'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                }
-              },
-              child: const Text('Ajouter'),
-            ),
-          ],
-        ),
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${recipe.title}: $portions portion(s) ajoutee(s)'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
+          );
+        },
       ),
     );
   }
@@ -1015,5 +971,459 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
         ],
       ),
     );
+  }
+}
+
+/// Bottom sheet for adding frozen dishes
+/// Supports manual entry or selection from existing recipes
+class _AddFreezerSheet extends ConsumerStatefulWidget {
+  final ScrollController scrollController;
+  final Future<void> Function(String name, List<DishCategory> categories, int portions) onAddManual;
+  final Future<void> Function(Recipe recipe, int portions) onAddFromRecipe;
+
+  const _AddFreezerSheet({
+    required this.scrollController,
+    required this.onAddManual,
+    required this.onAddFromRecipe,
+  });
+
+  @override
+  ConsumerState<_AddFreezerSheet> createState() => _AddFreezerSheetState();
+}
+
+enum _FreezerAddMode { manual, fromRecipe }
+
+class _AddFreezerSheetState extends ConsumerState<_AddFreezerSheet> {
+  _FreezerAddMode _mode = _FreezerAddMode.manual;
+
+  // Manual mode state
+  final _nameController = TextEditingController();
+  final Set<DishCategory> _selectedCategories = {DishCategory.complete};
+  int _manualPortions = 1;
+
+  // Recipe mode state
+  Recipe? _selectedRecipe;
+  int _recipePortions = 1;
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final recipesAsync = ref.watch(familyRecipesProvider);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.textHint,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+
+          // Title
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Icon(Icons.ac_unit, color: AppColors.info),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Ajouter au congelateur',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+
+          // Mode selector
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SegmentedButton<_FreezerAddMode>(
+              segments: const [
+                ButtonSegment(
+                  value: _FreezerAddMode.manual,
+                  label: Text('Entree manuelle'),
+                  icon: Icon(Icons.edit),
+                ),
+                ButtonSegment(
+                  value: _FreezerAddMode.fromRecipe,
+                  label: Text('Depuis recette'),
+                  icon: Icon(Icons.menu_book),
+                ),
+              ],
+              selected: {_mode},
+              onSelectionChanged: (Set<_FreezerAddMode> selected) {
+                setState(() => _mode = selected.first);
+              },
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Content based on mode
+          Expanded(
+            child: _mode == _FreezerAddMode.manual
+                ? _buildManualMode()
+                : _buildRecipeMode(recipesAsync),
+          ),
+
+          // Add button
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _canAdd() ? _handleAdd : null,
+                  icon: const Icon(Icons.add),
+                  label: Text(_getAddButtonLabel()),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildManualMode() {
+    return ListView(
+      controller: widget.scrollController,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      children: [
+        // Name field
+        TextField(
+          controller: _nameController,
+          decoration: InputDecoration(
+            labelText: 'Nom du plat *',
+            hintText: 'Ex: Lasagnes, Soupe de legumes...',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Categories
+        const Text(
+          'Categories',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: DishCategory.values.map((category) {
+            final isSelected = _selectedCategories.contains(category);
+            return FilterChip(
+              label: Text(category.label),
+              avatar: Text(category.icon),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedCategories.add(category);
+                  } else {
+                    _selectedCategories.remove(category);
+                  }
+                });
+              },
+              selectedColor: AppColors.primary.withValues(alpha: 0.2),
+            );
+          }).toList(),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Portions selector
+        _buildPortionsSelector(_manualPortions, (value) {
+          setState(() => _manualPortions = value);
+        }),
+      ],
+    );
+  }
+
+  Widget _buildRecipeMode(AsyncValue<List<Recipe>> recipesAsync) {
+    return Column(
+      children: [
+        // Search field
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Rechercher une recette...',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            onChanged: (value) => setState(() => _searchQuery = value.toLowerCase()),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Recipe list
+        Expanded(
+          child: recipesAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('Erreur: $e')),
+            data: (recipes) {
+              final filtered = recipes.where((r) {
+                if (_searchQuery.isEmpty) return true;
+                return r.title.toLowerCase().contains(_searchQuery);
+              }).toList();
+
+              if (filtered.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.menu_book, size: 48, color: context.colorTextHint),
+                      const SizedBox(height: 12),
+                      Text(
+                        recipes.isEmpty
+                            ? 'Aucune recette'
+                            : 'Aucune recette trouvee',
+                        style: TextStyle(color: context.colorTextSecondary),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                controller: widget.scrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final recipe = filtered[index];
+                  final isSelected = _selectedRecipe?.id == recipe.id;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : null,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: isSelected
+                          ? const BorderSide(color: AppColors.primary, width: 2)
+                          : BorderSide.none,
+                    ),
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _selectedRecipe = isSelected ? null : recipe;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            // Image
+                            Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceVariant,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: recipe.imageUrl != null
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        recipe.imageUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => const Icon(
+                                          Icons.restaurant,
+                                          color: AppColors.textHint,
+                                        ),
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.restaurant,
+                                      color: AppColors.textHint,
+                                    ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Title
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    recipe.title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (recipe.servings > 0)
+                                    Text(
+                                      '${recipe.servings} portions',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: context.colorTextSecondary,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            // Selection indicator
+                            if (isSelected)
+                              const Icon(Icons.check_circle, color: AppColors.primary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+
+        // Portions selector (only if recipe selected)
+        if (_selectedRecipe != null)
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: _buildPortionsSelector(_recipePortions, (value) {
+              setState(() => _recipePortions = value);
+            }),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPortionsSelector(int value, ValueChanged<int> onChanged) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.restaurant, color: AppColors.primary),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Nombre de portions',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          // Decrease button
+          IconButton(
+            onPressed: value > 1 ? () => onChanged(value - 1) : null,
+            icon: const Icon(Icons.remove_circle_outline),
+            color: AppColors.primary,
+          ),
+          // Value
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '$value',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ),
+          // Increase button
+          IconButton(
+            onPressed: value < 20 ? () => onChanged(value + 1) : null,
+            icon: const Icon(Icons.add_circle_outline),
+            color: AppColors.primary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _canAdd() {
+    if (_mode == _FreezerAddMode.manual) {
+      return _nameController.text.trim().isNotEmpty;
+    } else {
+      return _selectedRecipe != null;
+    }
+  }
+
+  String _getAddButtonLabel() {
+    final portions = _mode == _FreezerAddMode.manual ? _manualPortions : _recipePortions;
+    if (_mode == _FreezerAddMode.manual) {
+      final name = _nameController.text.trim();
+      if (name.isEmpty) {
+        return 'Ajouter';
+      }
+      return 'Ajouter $portions portion${portions > 1 ? 's' : ''}';
+    } else {
+      if (_selectedRecipe == null) {
+        return 'Selectionnez une recette';
+      }
+      return 'Ajouter $portions portion${portions > 1 ? 's' : ''}';
+    }
+  }
+
+  void _handleAdd() {
+    if (_mode == _FreezerAddMode.manual) {
+      final name = _nameController.text.trim();
+      if (name.isNotEmpty) {
+        widget.onAddManual(name, _selectedCategories.toList(), _manualPortions);
+      }
+    } else {
+      if (_selectedRecipe != null) {
+        widget.onAddFromRecipe(_selectedRecipe!, _recipePortions);
+      }
+    }
   }
 }
