@@ -16,6 +16,7 @@ class RecipeScraper {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+          'Accept-Charset': 'utf-8',
         },
       );
 
@@ -23,7 +24,9 @@ class RecipeScraper {
         throw Exception('Erreur HTTP ${response.statusCode}');
       }
 
-      final document = html_parser.parse(response.body);
+      // Decoder en UTF-8 (le body par defaut utilise latin1)
+      final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+      final document = html_parser.parse(body);
 
       // Chercher les scripts JSON-LD
       final scripts = document.querySelectorAll('script[type="application/ld+json"]');

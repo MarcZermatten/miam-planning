@@ -9,6 +9,7 @@ import '../features/recipes/presentation/screens/recipes_screen.dart';
 import '../features/recipes/presentation/screens/recipe_detail_screen.dart';
 import '../features/recipes/presentation/screens/add_recipe_screen.dart';
 import '../features/recipes/presentation/screens/recipe_search_screen.dart';
+import '../features/recipes/presentation/screens/edit_recipe_screen.dart';
 import '../features/meal_plan/presentation/screens/weekly_planner_screen.dart';
 import '../features/pantry/presentation/pantry_screen.dart';
 import '../features/shopping/presentation/shopping_list_screen.dart';
@@ -23,6 +24,7 @@ class AppRoutes {
   static const home = '/home';
   static const recipes = '/recipes';
   static const recipeDetail = '/recipes/:id';
+  static const editRecipe = '/recipes/:id/edit';
   static const addRecipe = '/recipes/add';
   static const searchRecipes = '/recipes/search';
   static const weeklyPlanner = '/planner';
@@ -87,6 +89,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return RecipeDetailScreen(recipeId: id);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.editRecipe,
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return EditRecipeScreen(recipeId: id);
         },
       ),
       GoRoute(

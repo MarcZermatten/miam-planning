@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
 
@@ -39,56 +40,65 @@ class RecipeSearchService {
         headers: _defaultHeaders,
       ).timeout(const Duration(seconds: 10));
 
-      if (response.statusCode != 200) return [];
+      if (response.statusCode != 200) {
+        debugPrint('Marmiton: HTTP ${response.statusCode}');
+        return [];
+      }
 
-      final document = html_parser.parse(response.body);
+      // Decoder en UTF-8
+      final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+      final document = html_parser.parse(body);
       final results = <ExternalRecipe>[];
 
-      // Marmiton utilise des cartes de recettes
-      final cards = document.querySelectorAll('[class*="recipe-card"], [class*="MRTN__sc"]');
+      // Marmiton structure 2024: chercher les liens de recettes
+      final links = document.querySelectorAll('a[href*="/recettes/recette_"]');
+      final seenUrls = <String>{};
 
-      for (final card in cards.take(10)) {
+      for (final link in links.take(20)) {
         try {
-          // Titre
-          final titleEl = card.querySelector('h4, [class*="title"], a');
-          final title = titleEl?.text.trim();
-          if (title == null || title.isEmpty) continue;
-
-          // URL
-          final linkEl = card.querySelector('a[href*="/recettes/"]');
-          var recipeUrl = linkEl?.attributes['href'];
-          if (recipeUrl != null && !recipeUrl.startsWith('http')) {
+          var recipeUrl = link.attributes['href'];
+          if (recipeUrl == null) continue;
+          if (!recipeUrl.startsWith('http')) {
             recipeUrl = 'https://www.marmiton.org$recipeUrl';
           }
-          if (recipeUrl == null) continue;
+
+          // Eviter les doublons
+          if (seenUrls.contains(recipeUrl)) continue;
+          seenUrls.add(recipeUrl);
+
+          // Titre depuis le lien ou un element parent
+          var title = link.text.trim();
+          if (title.isEmpty || title.length < 3) {
+            final titleEl = link.querySelector('h4, [class*="title"]') ??
+                           link.parent?.querySelector('h4, [class*="title"]');
+            title = titleEl?.text.trim() ?? '';
+          }
+          if (title.isEmpty || title.length < 3) continue;
 
           // Image
-          final imgEl = card.querySelector('img');
-          var imageUrl = imgEl?.attributes['src'] ?? imgEl?.attributes['data-src'];
-
-          // Rating
-          final ratingEl = card.querySelector('[class*="rating"], [class*="note"]');
-          final ratingText = ratingEl?.text ?? '';
-          final ratingMatch = RegExp(r'[\d,\.]+').firstMatch(ratingText);
-          final rating = ratingMatch != null
-              ? double.tryParse(ratingMatch.group(0)!.replaceAll(',', '.'))
-              : null;
+          final card = link.parent?.parent?.parent;
+          final imgEl = card?.querySelector('img') ?? link.querySelector('img');
+          var imageUrl = imgEl?.attributes['src'] ??
+                        imgEl?.attributes['data-src'] ??
+                        imgEl?.attributes['data-lazy-src'];
 
           results.add(ExternalRecipe(
             title: title,
             url: recipeUrl,
             imageUrl: imageUrl,
             source: 'Marmiton',
-            rating: rating,
           ));
+
+          if (results.length >= 10) break;
         } catch (_) {
           continue;
         }
       }
 
+      debugPrint('Marmiton: ${results.length} resultats');
       return results;
     } catch (e) {
-      print('Erreur recherche Marmiton: $e');
+      debugPrint('Erreur recherche Marmiton: $e');
       return [];
     }
   }
@@ -97,64 +107,78 @@ class RecipeSearchService {
   static Future<List<ExternalRecipe>> _searchBettyBossi(String query) async {
     try {
       final encoded = Uri.encodeComponent(query);
-      final url = 'https://www.bettybossi.ch/fr/Rezept/Suche?query=$encoded';
+      // Betty Bossi utilise une API de recherche
+      final url = 'https://www.bettybossi.ch/fr/Rezept/Suche?search=$encoded';
 
       final response = await http.get(
         Uri.parse(url),
         headers: _defaultHeaders,
       ).timeout(const Duration(seconds: 10));
 
-      if (response.statusCode != 200) return [];
+      if (response.statusCode != 200) {
+        debugPrint('Betty Bossi: HTTP ${response.statusCode}');
+        return [];
+      }
 
-      final document = html_parser.parse(response.body);
+      // Decoder en UTF-8
+      final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+      final document = html_parser.parse(body);
       final results = <ExternalRecipe>[];
+      final seenUrls = <String>{};
 
-      // Betty Bossi utilise des cartes
-      final cards = document.querySelectorAll('[class*="recipe"], [class*="teaser"], article');
+      // Betty Bossi: chercher tous les liens vers des recettes
+      final links = document.querySelectorAll('a[href*="/Rezept/Detail/"]');
 
-      for (final card in cards.take(10)) {
+      for (final link in links.take(20)) {
         try {
-          // Titre
-          final titleEl = card.querySelector('h2, h3, [class*="title"], a');
-          final title = titleEl?.text.trim();
-          if (title == null || title.isEmpty || title.length < 3) continue;
-
-          // URL
-          final linkEl = card.querySelector('a[href*="Rezept"]');
-          var recipeUrl = linkEl?.attributes['href'];
-          if (recipeUrl != null && !recipeUrl.startsWith('http')) {
+          var recipeUrl = link.attributes['href'];
+          if (recipeUrl == null) continue;
+          if (!recipeUrl.startsWith('http')) {
             recipeUrl = 'https://www.bettybossi.ch$recipeUrl';
           }
-          if (recipeUrl == null) continue;
 
-          // Image
-          final imgEl = card.querySelector('img');
-          var imageUrl = imgEl?.attributes['src'] ?? imgEl?.attributes['data-src'];
+          // Eviter les doublons
+          if (seenUrls.contains(recipeUrl)) continue;
+          seenUrls.add(recipeUrl);
+
+          // Titre
+          var title = link.text.trim();
+          if (title.isEmpty || title.length < 3) {
+            final parent = link.parent;
+            final titleEl = parent?.querySelector('h2, h3, h4, [class*="title"]');
+            title = titleEl?.text.trim() ?? '';
+          }
+          if (title.isEmpty || title.length < 3) continue;
+          // Nettoyer le titre (enlever les espaces multiples)
+          title = title.replaceAll(RegExp(r'\s+'), ' ').trim();
+          if (title.length > 100) title = title.substring(0, 100);
+
+          // Image - chercher dans le parent
+          final card = link.parent?.parent?.parent;
+          final imgEl = card?.querySelector('img') ?? link.querySelector('img');
+          var imageUrl = imgEl?.attributes['src'] ??
+                        imgEl?.attributes['data-src'];
           if (imageUrl != null && !imageUrl.startsWith('http')) {
             imageUrl = 'https://www.bettybossi.ch$imageUrl';
           }
-
-          // Temps de preparation
-          final timeEl = card.querySelector('[class*="time"], [class*="duration"]');
-          final timeText = timeEl?.text ?? '';
-          final timeMatch = RegExp(r'(\d+)\s*min').firstMatch(timeText);
-          final prepTime = timeMatch != null ? int.tryParse(timeMatch.group(1)!) : null;
 
           results.add(ExternalRecipe(
             title: title,
             url: recipeUrl,
             imageUrl: imageUrl,
             source: 'Betty Bossi',
-            prepTime: prepTime,
           ));
+
+          if (results.length >= 10) break;
         } catch (_) {
           continue;
         }
       }
 
+      debugPrint('Betty Bossi: ${results.length} resultats');
       return results;
     } catch (e) {
-      print('Erreur recherche Betty Bossi: $e');
+      debugPrint('Erreur recherche Betty Bossi: $e');
       return [];
     }
   }

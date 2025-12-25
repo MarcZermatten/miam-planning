@@ -55,6 +55,10 @@ class RecipeDetailScreen extends ConsumerWidget {
                     : null,
                 actions: [
                   IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => context.push('/recipes/${recipe.id}/edit'),
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () => _confirmDelete(context, ref, recipe),
                   ),
