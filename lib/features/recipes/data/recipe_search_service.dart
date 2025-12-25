@@ -5,9 +5,9 @@ import '../../../core/config/api_keys.dart';
 
 /// Recipe search providers
 enum RecipeProvider {
-  spoonacular,
   marmiton,
   cuisineAz,
+  spoonacular,
   bettyBossi, // En développement - nécessite backend Python
 }
 

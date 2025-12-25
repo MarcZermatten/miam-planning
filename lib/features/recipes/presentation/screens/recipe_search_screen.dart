@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../routing/app_router.dart';
 import '../../data/recipe_search_service.dart';
-import '../../data/recipe_scraper.dart';
-import '../../data/recipe_repository.dart';
-import '../../../auth/data/auth_repository.dart';
-import '../../../family/data/family_repository.dart';
 
 class RecipeSearchScreen extends ConsumerStatefulWidget {
   const RecipeSearchScreen({super.key});
@@ -17,10 +15,9 @@ class RecipeSearchScreen extends ConsumerStatefulWidget {
 class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
   final _searchController = TextEditingController();
   List<RecipeSearchResult> _results = [];
-  RecipeProvider _selectedProvider = RecipeProvider.spoonacular;
+  RecipeProvider _selectedProvider = RecipeProvider.marmiton;
   bool _isLoading = false;
   bool _hasSearched = false;
-  String? _importingUrl;
 
   // Filters
   int? _maxPrepTime; // null = no filter, otherwise max minutes
@@ -70,61 +67,12 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
   }
 
   Future<void> _importRecipe(RecipeSearchResult recipe) async {
-    setState(() => _importingUrl = recipe.url);
+    // Cacher le clavier
+    FocusScope.of(context).unfocus();
 
-    try {
-      // Scraper la recette complete
-      final scraped = await RecipeScraper.scrapeFromUrl(recipe.url);
-
-      if (scraped == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Impossible d\'importer cette recette')),
-          );
-        }
-        return;
-      }
-
-      // Sauvegarder directement
-      final user = ref.read(currentUserProvider);
-      final familyId = ref.read(currentFamilyIdProvider);
-
-      if (user == null || familyId == null) {
-        throw Exception('Non connecte');
-      }
-
-      await ref.read(recipeRepositoryProvider).createRecipe(
-        familyId: familyId,
-        title: scraped.title,
-        description: scraped.description,
-        createdBy: user.uid,
-        prepTime: scraped.prepTime,
-        cookTime: scraped.cookTime,
-        servings: scraped.servings,
-        ingredients: scraped.ingredients,
-        instructions: scraped.instructions,
-        sourceUrl: scraped.sourceUrl,
-        imageUrl: scraped.imageUrl,
-        sourceName: recipe.provider.label,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${scraped.title} importee!'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _importingUrl = null);
-    }
+    // Naviguer vers l'ecran d'ajout avec l'URL pre-remplie
+    final encodedUrl = Uri.encodeComponent(recipe.url);
+    context.push('${AppRoutes.addRecipe}?url=$encodedUrl');
   }
 
   @override
@@ -483,12 +431,11 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
       itemCount: filtered.length,
       itemBuilder: (context, index) {
         final recipe = filtered[index];
-        final isImporting = _importingUrl == recipe.url;
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: InkWell(
-            onTap: isImporting ? null : () => _importRecipe(recipe),
+            onTap: () => _importRecipe(recipe),
             borderRadius: BorderRadius.circular(12),
             child: Row(
               children: [
@@ -577,15 +524,9 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
                 ),
 
                 // Action
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: isImporting
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.add_circle_outline, color: AppColors.primary),
+                const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Icon(Icons.add_circle_outline, color: AppColors.primary),
                 ),
               ],
             ),

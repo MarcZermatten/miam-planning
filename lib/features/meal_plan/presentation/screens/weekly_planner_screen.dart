@@ -273,13 +273,15 @@ class WeeklyPlannerScreen extends ConsumerWidget {
           ],
         ),
         subtitle: Text(
-          hasAssignment ? assignment.recipeTitle : 'Tap pour ajouter',
+          hasAssignment
+              ? assignment.dishes.map((d) => d.dishName).join(' + ')
+              : 'Tap pour ajouter',
           style: TextStyle(
             fontSize: 14,
             fontWeight: hasAssignment ? FontWeight.w600 : FontWeight.normal,
             color: hasAssignment ? AppColors.textPrimary : AppColors.textHint,
           ),
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
         trailing: Row(
@@ -290,24 +292,31 @@ class WeeklyPlannerScreen extends ConsumerWidget {
                 icon: const Icon(Icons.close, size: 18),
                 color: AppColors.error,
                 onPressed: () => _removeMeal(ref, day, mealType),
-                tooltip: 'Supprimer',
+                tooltip: 'Supprimer tout',
               ),
             IconButton(
               icon: Icon(
-                hasAssignment ? Icons.swap_horiz : Icons.add_circle,
+                hasAssignment ? Icons.add : Icons.add_circle,
                 size: 22,
               ),
               color: AppColors.primaryDark,
-              onPressed: () => _showRecipeSelector(context, ref, day, mealType),
-              tooltip: hasAssignment ? 'Changer' : 'Ajouter',
+              onPressed: () => _showRecipeSelector(context, ref, day, mealType, assignment),
+              tooltip: hasAssignment ? 'Ajouter un plat' : 'Ajouter',
             ),
           ],
         ),
         onTap: () {
-          if (hasAssignment) {
-            context.push('/recipes/${assignment.recipeId}');
+          if (hasAssignment && assignment.dishes.length == 1) {
+            // Single dish - show details
+            final dish = assignment.dishes.first;
+            if (dish.recipeId != null) {
+              context.push('/recipes/${dish.recipeId}');
+            }
+          } else if (hasAssignment) {
+            // Multiple dishes - show selector to add more
+            _showRecipeSelector(context, ref, day, mealType, assignment);
           } else {
-            _showRecipeSelector(context, ref, day, mealType);
+            _showRecipeSelector(context, ref, day, mealType, null);
           }
         },
       ),
@@ -387,6 +396,7 @@ class WeeklyPlannerScreen extends ConsumerWidget {
     WidgetRef ref,
     DateTime day,
     String mealType,
+    MealAssignment? currentAssignment,
   ) {
     showModalBottomSheet(
       context: context,
@@ -401,11 +411,11 @@ class WeeklyPlannerScreen extends ConsumerWidget {
             scrollController: scrollController,
             onSelectRecipe: (recipe) {
               Navigator.pop(context);
-              _setMeal(ref, day, mealType, recipe);
+              _addMeal(ref, day, mealType, recipe, currentAssignment);
             },
             onSelectFrozen: (dish) {
               Navigator.pop(context);
-              _setMealFromFreezer(context, ref, day, mealType, dish);
+              _addMealFromFreezer(context, ref, day, mealType, dish, currentAssignment);
             },
           );
         },
@@ -413,92 +423,151 @@ class WeeklyPlannerScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _setMeal(
+  Future<void> _addMeal(
     WidgetRef ref,
     DateTime day,
     String mealType,
     Recipe recipe,
+    MealAssignment? currentAssignment,
   ) async {
     final familyId = ref.read(currentFamilyIdProvider);
     if (familyId == null) return;
+
+    // Create new dish assignment
+    final newDish = DishAssignment(
+      dishId: recipe.dishId ?? recipe.id,
+      dishName: recipe.title,
+      recipeId: recipe.id,
+      recipeName: recipe.displayName,
+      categories: ['complete'], // Default: assume complete meal
+    );
+
+    // Add to existing dishes or create new assignment
+    final dishes = currentAssignment != null
+        ? [...currentAssignment.dishes, newDish]
+        : [newDish];
 
     await ref.read(mealPlanRepositoryProvider).setMeal(
           familyId: familyId,
           date: day,
           mealType: mealType,
-          assignment: MealAssignment(
-            dishes: [
-              DishAssignment(
-                dishId: recipe.dishId ?? recipe.id,
-                dishName: recipe.title,
-                recipeId: recipe.id,
-                recipeName: recipe.displayName,
-              ),
-            ],
-          ),
+          assignment: MealAssignment(dishes: dishes),
         );
   }
 
-  Future<void> _setMealFromFreezer(
+  Future<void> _addMealFromFreezer(
     BuildContext context,
     WidgetRef ref,
     DateTime day,
     String mealType,
     Dish dish,
+    MealAssignment? currentAssignment,
   ) async {
     final familyId = ref.read(currentFamilyIdProvider);
     if (familyId == null) return;
 
-    // Set the meal with fromFreezer flag
+    // Show dialog to select number of portions
+    final portions = await _showPortionsDialog(context, dish);
+    if (portions == null || portions <= 0) return;
+
+    // Create new dish assignment
+    final newDish = DishAssignment(
+      dishId: dish.id,
+      dishName: dish.name,
+      fromFreezer: true,
+      portionsUsed: portions,
+      categories: dish.categories.map((c) => c.name).toList(),
+    );
+
+    // Add to existing dishes or create new assignment
+    final dishes = currentAssignment != null
+        ? [...currentAssignment.dishes, newDish]
+        : [newDish];
+
+    // Set the meal
     await ref.read(mealPlanRepositoryProvider).setMeal(
           familyId: familyId,
           date: day,
           mealType: mealType,
-          assignment: MealAssignment(
-            dishes: [
-              DishAssignment(
-                dishId: dish.id,
-                dishName: dish.name,
-                fromFreezer: true,
-                portionsUsed: 1,
-              ),
-            ],
-          ),
+          assignment: MealAssignment(dishes: dishes),
         );
 
     // Decrement frozen portions
     await ref.read(dishRepositoryProvider).useFromFreezer(
           familyId: familyId,
           dishId: dish.id,
-          portions: 1,
+          portions: portions,
         );
 
     // Show confirmation
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${dish.name} ajoute depuis le congelo'),
+          content: Text('${dish.name} ($portions portion${portions > 1 ? 's' : ''}) ajoute'),
           backgroundColor: AppColors.info,
-          action: SnackBarAction(
-            label: 'Annuler',
-            textColor: Colors.white,
-            onPressed: () async {
-              // Undo: remove meal and restore portion
-              await ref.read(mealPlanRepositoryProvider).removeMeal(
-                    familyId: familyId,
-                    date: day,
-                    mealType: mealType,
-                  );
-              await ref.read(dishRepositoryProvider).addToFreezer(
-                    familyId: familyId,
-                    dishId: dish.id,
-                    portions: 1,
-                  );
-            },
-          ),
         ),
       );
     }
+  }
+
+  /// Show dialog to select number of portions
+  Future<int?> _showPortionsDialog(BuildContext context, Dish dish) async {
+    int selectedPortions = 1;
+    final maxPortions = dish.frozenPortions;
+
+    return showDialog<int>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Portions de ${dish.name}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$maxPortions portion${maxPortions > 1 ? 's' : ''} disponible${maxPortions > 1 ? 's' : ''}',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    onPressed: selectedPortions > 1
+                        ? () => setDialogState(() => selectedPortions--)
+                        : null,
+                    icon: const Icon(Icons.remove_circle_outline),
+                    iconSize: 32,
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    '$selectedPortions',
+                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 16),
+                  IconButton(
+                    onPressed: selectedPortions < maxPortions
+                        ? () => setDialogState(() => selectedPortions++)
+                        : null,
+                    icon: const Icon(Icons.add_circle_outline),
+                    iconSize: 32,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, selectedPortions),
+              child: const Text('Confirmer'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _removeMeal(

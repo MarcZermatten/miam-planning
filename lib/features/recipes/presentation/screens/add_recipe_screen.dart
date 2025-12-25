@@ -11,7 +11,9 @@ import '../../data/recipe_search_service.dart';
 import '../../domain/recipe.dart';
 
 class AddRecipeScreen extends ConsumerStatefulWidget {
-  const AddRecipeScreen({super.key});
+  final String? initialUrl;
+
+  const AddRecipeScreen({super.key, this.initialUrl});
 
   @override
   ConsumerState<AddRecipeScreen> createState() => _AddRecipeScreenState();
@@ -47,6 +49,14 @@ class _AddRecipeScreenState extends ConsumerState<AddRecipeScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+
+    // Si une URL initiale est fournie, lancer l'import automatiquement
+    if (widget.initialUrl != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _urlController.text = widget.initialUrl!;
+        _importFromUrl();
+      });
+    }
   }
 
   @override
@@ -406,8 +416,11 @@ class _AddRecipeScreenState extends ConsumerState<AddRecipeScreen>
         _imageUrl = scraped.imageUrl;
       });
 
+      // Cacher le clavier
+      FocusScope.of(context).unfocus();
+
       // Basculer vers l'onglet manuel pour voir/editer
-      _tabController.animateTo(1);
+      _tabController.animateTo(2);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

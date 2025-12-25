@@ -78,7 +78,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.addRecipe,
-        builder: (context, state) => const AddRecipeScreen(),
+        builder: (context, state) {
+          final initialUrl = state.uri.queryParameters['url'];
+          return AddRecipeScreen(initialUrl: initialUrl);
+        },
       ),
       GoRoute(
         path: AppRoutes.searchRecipes,
