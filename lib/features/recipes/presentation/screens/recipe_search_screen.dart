@@ -86,7 +86,7 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
           // Barre de recherche
           Container(
             padding: const EdgeInsets.all(16),
-            color: AppColors.surface,
+            color: context.colorSurface,
             child: Row(
               children: [
                 Expanded(
@@ -136,7 +136,7 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
                   label: Text(
                     isAvailable ? provider.label : '${provider.label} (bientôt)',
                     style: TextStyle(
-                      color: isAvailable ? null : AppColors.textHint,
+                      color: isAvailable ? null : context.colorTextHint,
                       fontSize: isAvailable ? null : 12,
                     ),
                   ),
@@ -204,7 +204,7 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
                       child: Text(
                         '${_filteredResults.length}/${_results.length}',
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: context.colorTextSecondary,
                           fontSize: 13,
                         ),
                       ),
@@ -360,16 +360,16 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.restaurant_menu, size: 64, color: AppColors.textHint),
+            Icon(Icons.restaurant_menu, size: 64, color: context.colorTextHint),
             const SizedBox(height: 16),
             Text(
               'Recherchez une recette',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+              style: TextStyle(color: context.colorTextSecondary, fontSize: 16),
             ),
             const SizedBox(height: 8),
             Text(
               'Tapez un ingredient ou un plat',
-              style: TextStyle(color: AppColors.textHint, fontSize: 14),
+              style: TextStyle(color: context.colorTextHint, fontSize: 14),
             ),
           ],
         ),
@@ -381,16 +381,16 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off, size: 64, color: AppColors.textHint),
+            Icon(Icons.search_off, size: 64, color: context.colorTextHint),
             const SizedBox(height: 16),
             Text(
               'Aucun resultat',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+              style: TextStyle(color: context.colorTextSecondary, fontSize: 16),
             ),
             const SizedBox(height: 8),
             Text(
               'Essayez avec d\'autres mots-cles',
-              style: TextStyle(color: AppColors.textHint, fontSize: 14),
+              style: TextStyle(color: context.colorTextHint, fontSize: 14),
             ),
           ],
         ),
@@ -404,11 +404,11 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.filter_alt_off, size: 64, color: AppColors.textHint),
+            Icon(Icons.filter_alt_off, size: 64, color: context.colorTextHint),
             const SizedBox(height: 16),
             Text(
               'Aucun resultat avec ces filtres',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+              style: TextStyle(color: context.colorTextSecondary, fontSize: 16),
             ),
             const SizedBox(height: 8),
             TextButton.icon(
@@ -445,21 +445,21 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
                   child: Container(
                     width: 100,
                     height: 100,
-                    color: AppColors.surfaceVariant,
+                    color: context.colorSurfaceVariant,
                     child: recipe.imageUrl != null
                         ? Image.network(
                             recipe.imageUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
+                            errorBuilder: (_, __, ___) => Icon(
                               Icons.restaurant,
                               size: 40,
-                              color: AppColors.textHint,
+                              color: context.colorTextHint,
                             ),
                           )
-                        : const Icon(
+                        : Icon(
                             Icons.restaurant,
                             size: 40,
-                            color: AppColors.textHint,
+                            color: context.colorTextHint,
                           ),
                   ),
                 ),
@@ -509,11 +509,11 @@ class _RecipeSearchScreenState extends ConsumerState<RecipeSearchScreen> {
                             ],
                             if (recipe.prepTime != null) ...[
                               const SizedBox(width: 8),
-                              Icon(Icons.timer_outlined, size: 14, color: AppColors.textSecondary),
+                              Icon(Icons.timer_outlined, size: 14, color: context.colorTextSecondary),
                               const SizedBox(width: 2),
                               Text(
                                 '${recipe.prepTime} min',
-                                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                style: TextStyle(fontSize: 12, color: context.colorTextSecondary),
                               ),
                             ],
                           ],

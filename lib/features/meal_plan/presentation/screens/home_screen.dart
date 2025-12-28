@@ -34,7 +34,18 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Popote'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/popote_logo.png',
+              height: 32,
+              width: 32,
+            ),
+            const SizedBox(width: 8),
+            const Text('Popote'),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.family_restroom),
@@ -83,16 +94,26 @@ class HomeScreen extends ConsumerWidget {
                     final icon = _getMealIcon(mealType);
                     final color = _getMealColor(mealType);
 
+                    // Format meal display with accompaniment
+                    String mealDisplay = 'Non planifie';
+                    if (assignment != null && assignment.isNotEmpty) {
+                      mealDisplay = assignment.recipeTitle;
+                      if (assignment.accompaniment != null &&
+                          assignment.accompaniment!.isNotEmpty) {
+                        mealDisplay += ' + ${assignment.accompaniment}';
+                      }
+                    }
+
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: _buildMealCard(
                         context,
                         label,
-                        assignment?.recipeTitle ?? 'Non planifie',
+                        mealDisplay,
                         icon,
                         color,
-                        hasRecipe: assignment != null,
-                        onTap: assignment != null
+                        hasRecipe: assignment != null && assignment.isNotEmpty,
+                        onTap: assignment != null && assignment.isNotEmpty
                             ? () => context.push('/recipes/${assignment.recipeId}')
                             : () => context.go(AppRoutes.weeklyPlanner),
                       ),
@@ -137,6 +158,10 @@ class HomeScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
+            // Meal statistics
+            const MealStatsCard(),
+            const SizedBox(height: 24),
+
             // Suggestions based on pantry
             if (suggestions.isNotEmpty) ...[
               Row(
@@ -175,10 +200,6 @@ class HomeScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
             ],
-
-            // Meal statistics
-            const MealStatsCard(),
-            const SizedBox(height: 24),
 
             // Popular recipes
             recipesAsync.when(

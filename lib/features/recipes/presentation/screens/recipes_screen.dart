@@ -145,20 +145,20 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
           Icon(
             Icons.restaurant_menu,
             size: 64,
-            color: AppColors.textHint,
+            color: context.colorTextHint,
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Aucune recette',
             style: TextStyle(
               fontSize: 18,
-              color: AppColors.textSecondary,
+              color: context.colorTextSecondary,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Ajoutez votre premiere recette !',
-            style: TextStyle(color: AppColors.textHint),
+            style: TextStyle(color: context.colorTextHint),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
@@ -186,7 +186,7 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
+                  color: context.colorSurfaceVariant,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: recipe.imageUrl != null
@@ -195,15 +195,15 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                         child: Image.network(
                           recipe.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
+                          errorBuilder: (_, __, ___) => Icon(
                             Icons.restaurant,
-                            color: AppColors.textHint,
+                            color: context.colorTextHint,
                           ),
                         ),
                       )
-                    : const Icon(
+                    : Icon(
                         Icons.restaurant,
-                        color: AppColors.textHint,
+                        color: context.colorTextHint,
                       ),
               ),
               const SizedBox(width: 12),
@@ -227,28 +227,28 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                         Icon(
                           Icons.timer_outlined,
                           size: 14,
-                          color: AppColors.textSecondary,
+                          color: context.colorTextSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           '${recipe.totalTime} min',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: context.colorTextSecondary,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Icon(
                           Icons.people_outline,
                           size: 14,
-                          color: AppColors.textSecondary,
+                          color: context.colorTextSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           '${recipe.servings} pers.',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: context.colorTextSecondary,
                           ),
                         ),
                       ],
@@ -299,21 +299,23 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
   }
 
   Widget _buildRating(double rating, bool isKid) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          isKid ? Icons.child_care : Icons.person,
-          size: 12,
-          color: AppColors.textSecondary,
-        ),
+    return Builder(
+      builder: (context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isKid ? Icons.child_care : Icons.person,
+            size: 12,
+            color: context.colorTextSecondary,
+          ),
         const SizedBox(width: 2),
         Text(
           rating.toStringAsFixed(1),
           style: const TextStyle(fontSize: 12),
         ),
         const Icon(Icons.star, size: 12, color: AppColors.warning),
-      ],
+        ],
+      ),
     );
   }
 }

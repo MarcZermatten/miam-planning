@@ -47,8 +47,10 @@ class RecipeDetailScreen extends ConsumerWidget {
                         background: Image.network(
                           recipe.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: AppColors.surfaceVariant,
+                          errorBuilder: (_, __, ___) => Builder(
+                            builder: (context) => Container(
+                              color: context.colorSurfaceVariant,
+                            ),
                           ),
                         ),
                       )
@@ -82,9 +84,11 @@ class RecipeDetailScreen extends ConsumerWidget {
                       ),
                       if (recipe.description != null) ...[
                         const SizedBox(height: 8),
-                        Text(
-                          recipe.description!,
-                          style: const TextStyle(color: AppColors.textSecondary),
+                        Builder(
+                          builder: (context) => Text(
+                            recipe.description!,
+                            style: TextStyle(color: context.colorTextSecondary),
+                          ),
                         ),
                       ],
                       const SizedBox(height: 16),
@@ -245,19 +249,21 @@ class RecipeDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildInfoChip(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AppColors.textSecondary),
-          const SizedBox(width: 4),
-          Text(label, style: const TextStyle(fontSize: 13)),
-        ],
+    return Builder(
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: context.colorSurfaceVariant,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: context.colorTextSecondary),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(fontSize: 13)),
+          ],
+        ),
       ),
     );
   }
@@ -279,17 +285,18 @@ class RecipeDetailScreen extends ConsumerWidget {
     // Emojis pour les enfants (1-5)
     const kidEmojis = ['😫', '😕', '😐', '🙂', '😋'];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        Row(
-          children: [
-            Icon(
-              isKid ? Icons.child_care : Icons.person,
-              size: 16,
-              color: AppColors.textSecondary,
-            ),
+    return Builder(
+      builder: (context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 12, color: context.colorTextSecondary)),
+          Row(
+            children: [
+              Icon(
+                isKid ? Icons.child_care : Icons.person,
+                size: 16,
+                color: context.colorTextSecondary,
+              ),
             const SizedBox(width: 4),
             if (isKid) ...[
               Text(
@@ -312,9 +319,10 @@ class RecipeDetailScreen extends ConsumerWidget {
               const SizedBox(width: 4),
               Text(rating.toStringAsFixed(1)),
             ],
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -375,9 +383,11 @@ class RecipeDetailScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Member selector
-                const Text(
-                  'Qui note ?',
-                  style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                Builder(
+                  builder: (dialogContext) => Text(
+                    'Qui note ?',
+                    style: TextStyle(fontSize: 14, color: dialogContext.colorTextSecondary),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -413,9 +423,11 @@ class RecipeDetailScreen extends ConsumerWidget {
 
                 // Rating selector
                 if (isKid) ...[
-                  const Text(
-                    'Comment c\'etait ?',
-                    style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                  Builder(
+                    builder: (dialogContext) => Text(
+                      'Comment c\'etait ?',
+                      style: TextStyle(fontSize: 14, color: dialogContext.colorTextSecondary),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -444,9 +456,11 @@ class RecipeDetailScreen extends ConsumerWidget {
                     }),
                   ),
                 ] else ...[
-                  const Text(
-                    'Votre note',
-                    style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                  Builder(
+                    builder: (dialogContext) => Text(
+                      'Votre note',
+                      style: TextStyle(fontSize: 14, color: dialogContext.colorTextSecondary),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(

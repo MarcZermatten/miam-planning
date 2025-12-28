@@ -410,9 +410,9 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                       ),
                       Text(
                         dish.categoriesDisplay,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: context.colorTextSecondary,
                         ),
                       ),
                     ],
@@ -451,9 +451,9 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                 if (daysInFreezer != null)
                   Text(
                     'Congele il y a $daysInFreezer jours',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textHint,
+                      color: context.colorTextHint,
                     ),
                   ),
                 const Spacer(),
@@ -1029,7 +1029,7 @@ class _AddFreezerSheetState extends ConsumerState<_AddFreezerSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: AppColors.textHint,
+              color: context.colorTextHint,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -1269,7 +1269,7 @@ class _AddFreezerSheetState extends ConsumerState<_AddFreezerSheet> {
                               width: 50,
                               height: 50,
                               decoration: BoxDecoration(
-                                color: AppColors.surfaceVariant,
+                                color: context.colorSurfaceVariant,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: recipe.imageUrl != null
@@ -1284,9 +1284,9 @@ class _AddFreezerSheetState extends ConsumerState<_AddFreezerSheet> {
                                         ),
                                       ),
                                     )
-                                  : const Icon(
+                                  : Icon(
                                       Icons.restaurant,
-                                      color: AppColors.textHint,
+                                      color: context.colorTextHint,
                                     ),
                             ),
                             const SizedBox(width: 12),

@@ -114,19 +114,83 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Main shell with bottom navigation
-class MainShell extends StatelessWidget {
+/// Main shell with bottom navigation and swipe support
+class MainShell extends StatefulWidget {
   final Widget child;
 
   const MainShell({super.key, required this.child});
 
   @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> {
+  late PageController _pageController;
+  int _currentIndex = 0;
+
+  static const _routes = [
+    AppRoutes.home,
+    AppRoutes.recipes,
+    AppRoutes.weeklyPlanner,
+    AppRoutes.pantry,
+    AppRoutes.shopping,
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newIndex = _calculateSelectedIndex(context);
+    if (newIndex != _currentIndex) {
+      _currentIndex = newIndex;
+      // Sync page controller with navigation
+      if (_pageController.hasClients && _pageController.page?.round() != newIndex) {
+        _pageController.jumpToPage(newIndex);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: child,
+      body: PageView(
+        controller: _pageController,
+        onPageChanged: (index) {
+          if (index != _currentIndex) {
+            setState(() => _currentIndex = index);
+            context.go(_routes[index]);
+          }
+        },
+        children: const [
+          HomeScreen(),
+          RecipesScreen(),
+          WeeklyPlannerScreen(),
+          PantryScreen(),
+          ShoppingListScreen(),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _calculateSelectedIndex(context),
-        onDestinationSelected: (index) => _onItemTapped(index, context),
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
+          setState(() => _currentIndex = index);
+          _pageController.animateToPage(
+            index,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+          context.go(_routes[index]);
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -166,25 +230,5 @@ class MainShell extends StatelessWidget {
     if (location.startsWith(AppRoutes.pantry)) return 3;
     if (location.startsWith(AppRoutes.shopping)) return 4;
     return 0;
-  }
-
-  void _onItemTapped(int index, BuildContext context) {
-    switch (index) {
-      case 0:
-        context.go(AppRoutes.home);
-        break;
-      case 1:
-        context.go(AppRoutes.recipes);
-        break;
-      case 2:
-        context.go(AppRoutes.weeklyPlanner);
-        break;
-      case 3:
-        context.go(AppRoutes.pantry);
-        break;
-      case 4:
-        context.go(AppRoutes.shopping);
-        break;
-    }
   }
 }

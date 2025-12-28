@@ -45,25 +45,36 @@ class WeeklyPlannerScreen extends ConsumerWidget {
           // Week selector
           _buildWeekSelector(context, ref, weekStart),
 
-          // Days list
+          // Days list with horizontal swipe to change week
           Expanded(
-            child: mealPlanAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Erreur: $e')),
-              data: (mealPlan) => ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: 7,
-                itemBuilder: (context, index) {
-                  final day = weekStart.add(Duration(days: index));
-                  return _buildDayCard(
-                    context,
-                    ref,
-                    day,
-                    index,
-                    mealPlan,
-                    enabledMeals,
-                  );
-                },
+            child: GestureDetector(
+              onHorizontalDragEnd: (details) {
+                if (details.primaryVelocity == null) return;
+                // Swipe left = next week, swipe right = previous week
+                if (details.primaryVelocity! < -200) {
+                  ref.read(selectedWeekOffsetProvider.notifier).state++;
+                } else if (details.primaryVelocity! > 200) {
+                  ref.read(selectedWeekOffsetProvider.notifier).state--;
+                }
+              },
+              child: mealPlanAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('Erreur: $e')),
+                data: (mealPlan) => ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: 7,
+                  itemBuilder: (context, index) {
+                    final day = weekStart.add(Duration(days: index));
+                    return _buildDayCard(
+                      context,
+                      ref,
+                      day,
+                      index,
+                      mealPlan,
+                      enabledMeals,
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -78,7 +89,7 @@ class WeeklyPlannerScreen extends ConsumerWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      color: AppColors.surfaceVariant,
+      color: context.colorSurfaceVariant,
       child: Row(
         children: [
           IconButton(
@@ -167,10 +178,10 @@ class WeeklyPlannerScreen extends ConsumerWidget {
         leading: CircleAvatar(
           backgroundColor: isToday
               ? (isDark ? AppColors.darkPrimary : AppColors.primary)
-              : (isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant),
+              : context.colorSurfaceVariant,
           foregroundColor: isToday
               ? Colors.white
-              : (isDark ? AppColors.darkTextPrimary : AppColors.textPrimary),
+              : context.colorTextPrimary,
           child: Text('${day.day}'),
         ),
         title: Text(
@@ -200,31 +211,35 @@ class WeeklyPlannerScreen extends ConsumerWidget {
   Widget? _buildDaySummary(DayMeals dayMeals, List<String> enabledMeals) {
     final planned = enabledMeals.where((m) => dayMeals.getMeal(m) != null).length;
     if (planned == 0) {
-      return const Text(
-        'Aucun repas planifie',
-        style: TextStyle(fontSize: 12, color: AppColors.textHint),
+      return Builder(
+        builder: (context) => Text(
+          'Aucun repas planifie',
+          style: TextStyle(fontSize: 12, color: context.colorTextHint),
+        ),
       );
     }
 
     final isComplete = planned == enabledMeals.length;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          isComplete ? Icons.check_circle : Icons.schedule,
-          size: 14,
-          color: isComplete ? AppColors.success : AppColors.warning,
-        ),
-        const SizedBox(width: 4),
-        Text(
-          '$planned/${enabledMeals.length} repas',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: isComplete ? AppColors.success : AppColors.textSecondary,
+    return Builder(
+      builder: (context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isComplete ? Icons.check_circle : Icons.schedule,
+            size: 14,
+            color: isComplete ? AppColors.success : AppColors.warning,
           ),
-        ),
-      ],
+          const SizedBox(width: 4),
+          Text(
+            '$planned/${enabledMeals.length} repas',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isComplete ? AppColors.success : context.colorTextSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -262,7 +277,7 @@ class WeeklyPlannerScreen extends ConsumerWidget {
           decoration: BoxDecoration(
             color: hasAssignment
                 ? (isDark ? AppColors.darkPrimaryDark : AppColors.primaryMedium)
-                : (isDark ? AppColors.darkTextHint.withValues(alpha: 0.3) : AppColors.textHint.withValues(alpha: 0.3)),
+                : context.colorTextHint.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
@@ -295,8 +310,8 @@ class WeeklyPlannerScreen extends ConsumerWidget {
             fontSize: 14,
             fontWeight: hasAssignment ? FontWeight.w600 : FontWeight.normal,
             color: hasAssignment
-                ? (isDark ? AppColors.darkTextPrimary : AppColors.textPrimary)
-                : (isDark ? AppColors.darkTextHint : AppColors.textHint),
+                ? context.colorTextPrimary
+                : context.colorTextHint,
           ),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -967,13 +982,15 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
     return Column(
       children: [
         // Handle
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          width: 40,
-          height: 4,
-          decoration: BoxDecoration(
-            color: AppColors.textHint,
-            borderRadius: BorderRadius.circular(2),
+        Builder(
+          builder: (context) => Container(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: context.colorTextHint,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
         ),
 
@@ -1091,10 +1108,11 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
             final recipe = item.recipe;
             final matchPercent = item.matchPercent;
 
-            return ListTile(
-              leading: CircleAvatar(
-                backgroundColor: AppColors.surfaceVariant,
-                child: recipe.imageUrl != null
+            return Builder(
+              builder: (context) => ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: context.colorSurfaceVariant,
+                  child: recipe.imageUrl != null
                     ? ClipOval(
                         child: Image.network(
                           recipe.imageUrl!,
@@ -1105,44 +1123,45 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                         ),
                       )
                     : const Icon(Icons.restaurant),
-              ),
-              title: Text(recipe.title),
-              subtitle: Row(
-                children: [
-                  Text('${recipe.totalTime} min'),
-                  if (matchPercent > 0) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _getMatchColor(matchPercent).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '${(matchPercent * 100).round()}%',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: _getMatchColor(matchPercent),
+                ),
+                title: Text(recipe.title),
+                subtitle: Row(
+                  children: [
+                    Text('${recipe.totalTime} min'),
+                    if (matchPercent > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _getMatchColor(matchPercent).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${(matchPercent * 100).round()}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: _getMatchColor(matchPercent),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (matchPercent >= 1.0)
+                      const Tooltip(
+                        message: 'Tous les ingredients disponibles!',
+                        child: Icon(Icons.check_circle, color: AppColors.success, size: 20),
+                      ),
+                    if (recipe.isKidApproved)
+                      const Icon(Icons.child_care, color: AppColors.fruits, size: 20),
+                  ],
+                ),
+                onTap: () => widget.onSelectRecipe(recipe),
               ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (matchPercent >= 1.0)
-                    const Tooltip(
-                      message: 'Tous les ingredients disponibles!',
-                      child: Icon(Icons.check_circle, color: AppColors.success, size: 20),
-                    ),
-                  if (recipe.isKidApproved)
-                    const Icon(Icons.child_care, color: AppColors.fruits, size: 20),
-                ],
-              ),
-              onTap: () => widget.onSelectRecipe(recipe),
             );
           },
         );
@@ -1156,22 +1175,24 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
       error: (e, _) => Center(child: Text('Erreur: $e')),
       data: (dishes) {
         if (dishes.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.ac_unit, size: 48, color: AppColors.textHint),
-                const SizedBox(height: 16),
-                const Text(
-                  'Aucun plat congele',
-                  style: TextStyle(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Ajoutez des plats dans Frigo > Congelo',
-                  style: TextStyle(fontSize: 12, color: AppColors.textHint),
-                ),
-              ],
+          return Builder(
+            builder: (context) => Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.ac_unit, size: 48, color: context.colorTextHint),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Aucun plat congele',
+                    style: TextStyle(color: context.colorTextSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Ajoutez des plats dans Frigo > Congelo',
+                    style: TextStyle(fontSize: 12, color: context.colorTextHint),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -1329,36 +1350,40 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
 
               // Existing quick dishes
               if (quickDishes.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.flash_on, size: 48, color: AppColors.textHint),
-                        SizedBox(height: 16),
-                        Text(
-                          'Aucun plat rapide',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Creez des plats simples pour les reutiliser',
-                          style: TextStyle(fontSize: 12, color: AppColors.textHint),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                Builder(
+                  builder: (context) => Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.flash_on, size: 48, color: context.colorTextHint),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Aucun plat rapide',
+                            style: TextStyle(color: context.colorTextSecondary),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Creez des plats simples pour les reutiliser',
+                            style: TextStyle(fontSize: 12, color: context.colorTextHint),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 )
               else ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text(
-                    'Plats recents (${quickDishes.length})',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
+                Builder(
+                  builder: (context) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      'Plats recents (${quickDishes.length})',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: context.colorTextSecondary,
+                      ),
                     ),
                   ),
                 ),
@@ -1384,17 +1409,19 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                         'Utilise ${quickDish.usageCount}x',
                         style: const TextStyle(fontSize: 12),
                       ),
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceVariant,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '${quickDish.usageCount}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                      trailing: Builder(
+                        builder: (context) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: context.colorSurfaceVariant,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${quickDish.usageCount}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ),
