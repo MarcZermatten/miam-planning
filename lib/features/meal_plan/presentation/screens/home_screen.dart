@@ -333,11 +333,11 @@ class HomeScreen extends ConsumerWidget {
         width: 140,
         margin: const EdgeInsets.only(right: 12),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.colorSurface,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.3 : 0.05),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -350,7 +350,7 @@ class HomeScreen extends ConsumerWidget {
             Container(
               height: 80,
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: context.colorSurfaceVariant,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                 image: imageUrl != null
                     ? DecorationImage(
@@ -360,7 +360,7 @@ class HomeScreen extends ConsumerWidget {
                     : null,
               ),
               child: imageUrl == null
-                  ? const Center(child: Icon(Icons.restaurant, size: 32, color: AppColors.textHint))
+                  ? Center(child: Icon(Icons.restaurant, size: 32, color: context.colorTextHint))
                   : null,
             ),
             // Text
