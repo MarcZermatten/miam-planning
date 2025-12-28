@@ -146,7 +146,7 @@ class MainShell extends StatelessWidget {
           NavigationDestination(
             icon: Icon(Icons.kitchen_outlined),
             selectedIcon: Icon(Icons.kitchen),
-            label: 'Frigo',
+            label: 'Stock',
           ),
           NavigationDestination(
             icon: Icon(Icons.shopping_cart_outlined),

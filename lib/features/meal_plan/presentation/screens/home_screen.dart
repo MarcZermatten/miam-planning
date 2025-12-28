@@ -8,8 +8,8 @@ import '../../../auth/data/auth_repository.dart';
 import '../../../family/data/family_repository.dart';
 import '../../../pantry/data/pantry_repository.dart';
 import '../../../recipes/data/recipe_repository.dart';
-import '../../../recipes/domain/recipe.dart';
 import '../../data/meal_plan_repository.dart';
+import '../widgets/meal_stats_card.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -24,7 +24,6 @@ class HomeScreen extends ConsumerWidget {
     final enabledMeals = family?.settings.enabledMeals ?? ['lunch', 'dinner'];
     final suggestions = ref.watch(suggestedRecipesProvider);
     final recipesAsync = ref.watch(familyRecipesProvider);
-    final leftoverSuggestions = ref.watch(leftoverSuggestionsProvider);
 
     // Get user's first name
     String greeting = 'Bonjour';
@@ -177,46 +176,9 @@ class HomeScreen extends ConsumerWidget {
               const SizedBox(height: 24),
             ],
 
-            // Leftover suggestions
-            if (leftoverSuggestions.isNotEmpty) ...[
-              Row(
-                children: [
-                  const Icon(Icons.eco, size: 20, color: AppColors.success),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Utiliser vos restes',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Recettes avec les ingredients de vos repas recents',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 140,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: leftoverSuggestions.length,
-                  itemBuilder: (context, index) {
-                    final recipe = leftoverSuggestions[index];
-                    return _buildSuggestionCard(
-                      context,
-                      recipe.title,
-                      'Reutiliser',
-                      recipe.imageUrl,
-                      () => context.push('/recipes/${recipe.id}'),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
+            // Meal statistics
+            const MealStatsCard(),
+            const SizedBox(height: 24),
 
             // Popular recipes
             recipesAsync.when(

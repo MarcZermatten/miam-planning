@@ -223,11 +223,29 @@ class RecipeSearchService {
           title ??= card.text.trim().split('\n').first;
           if (title.isEmpty || title.length < 3 || title.length > 200) continue;
 
-          // Get image
+          // Get image - try multiple attribute strategies
           final imgEl = card.querySelector('img');
           String? imageUrl = imgEl?.attributes['data-src'] ??
               imgEl?.attributes['data-lazy-src'] ??
               imgEl?.attributes['src'];
+
+          // Try srcset if no direct URL found
+          if (imageUrl == null || imageUrl.isEmpty) {
+            final srcset = imgEl?.attributes['srcset'];
+            if (srcset != null && srcset.isNotEmpty) {
+              // Take first URL from srcset (format: "url1 1x, url2 2x")
+              imageUrl = srcset.split(',').first.split(' ').first.trim();
+            }
+          }
+
+          // Convert relative URLs to absolute
+          if (imageUrl != null && imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
+            if (imageUrl.startsWith('//')) {
+              imageUrl = 'https:$imageUrl';
+            } else if (imageUrl.startsWith('/')) {
+              imageUrl = 'https://www.marmiton.org$imageUrl';
+            }
+          }
 
           results.add(RecipeSearchResult(
             title: title,
@@ -355,7 +373,26 @@ class RecipeSearchService {
           final fullUrl = link.startsWith('http') ? link : 'https://www.cuisineaz.com$link';
 
           final imgEl = card.querySelector('img');
-          String? imageUrl = imgEl?.attributes['data-src'] ?? imgEl?.attributes['src'];
+          String? imageUrl = imgEl?.attributes['data-src'] ??
+              imgEl?.attributes['data-lazy-src'] ??
+              imgEl?.attributes['src'];
+
+          // Try srcset if no direct URL found
+          if (imageUrl == null || imageUrl.isEmpty) {
+            final srcset = imgEl?.attributes['srcset'];
+            if (srcset != null && srcset.isNotEmpty) {
+              imageUrl = srcset.split(',').first.split(' ').first.trim();
+            }
+          }
+
+          // Convert relative URLs to absolute
+          if (imageUrl != null && imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
+            if (imageUrl.startsWith('//')) {
+              imageUrl = 'https:$imageUrl';
+            } else if (imageUrl.startsWith('/')) {
+              imageUrl = 'https://www.cuisineaz.com$imageUrl';
+            }
+          }
 
           results.add(RecipeSearchResult(
             title: title,

@@ -8,7 +8,9 @@ import '../../../pantry/data/pantry_repository.dart';
 import '../../../recipes/data/recipe_repository.dart';
 import '../../../recipes/domain/recipe.dart';
 import '../../../dishes/data/dish_repository.dart';
+import '../../../dishes/data/quick_dish_repository.dart';
 import '../../../dishes/domain/dish.dart';
+import '../../../dishes/domain/quick_dish.dart';
 import '../../data/meal_plan_repository.dart';
 import '../../domain/meal_plan.dart';
 
@@ -287,7 +289,7 @@ class WeeklyPlannerScreen extends ConsumerWidget {
         ),
         subtitle: Text(
           hasAssignment
-              ? assignment.dishes.map((d) => d.dishName).join(' + ')
+              ? _formatMealDisplay(assignment)
               : 'Tap pour ajouter',
           style: TextStyle(
             fontSize: 14,
@@ -306,8 +308,18 @@ class WeeklyPlannerScreen extends ConsumerWidget {
               IconButton(
                 icon: const Icon(Icons.close, size: 18),
                 color: AppColors.error,
-                onPressed: () => _removeMeal(ref, day, mealType),
+                onPressed: () => _removeMeal(context, ref, day, mealType),
                 tooltip: 'Supprimer tout',
+              ),
+            if (hasAssignment)
+              IconButton(
+                icon: Icon(
+                  assignment.accompaniment != null ? Icons.rice_bowl : Icons.rice_bowl_outlined,
+                  size: 20,
+                ),
+                color: assignment.accompaniment != null ? AppColors.primary : AppColors.textHint,
+                onPressed: () => _showAccompanimentSelector(context, ref, day, mealType, assignment),
+                tooltip: assignment.accompaniment ?? 'Ajouter accompagnement',
               ),
             IconButton(
               icon: Icon(
@@ -353,6 +365,116 @@ class WeeklyPlannerScreen extends ConsumerWidget {
     }
   }
 
+  /// Format meal display with dishes and optional accompaniment
+  String _formatMealDisplay(MealAssignment assignment) {
+    final dishNames = assignment.dishes.map((d) => d.dishName).join(' + ');
+    if (assignment.accompaniment != null && assignment.accompaniment!.isNotEmpty) {
+      return '$dishNames + ${assignment.accompaniment}';
+    }
+    return dishNames;
+  }
+
+  /// Show accompaniment selector bottom sheet
+  void _showAccompanimentSelector(
+    BuildContext context,
+    WidgetRef ref,
+    DateTime day,
+    String mealType,
+    MealAssignment assignment,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.rice_bowl, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Accompagnement',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (assignment.accompaniment != null)
+                    TextButton(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _setAccompaniment(ref, day, mealType, assignment, null);
+                      },
+                      child: const Text('Retirer'),
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: defaultAccompaniments.map((acc) {
+                      final isSelected = assignment.accompaniment == acc;
+                      return ChoiceChip(
+                        label: Text(acc),
+                        selected: isSelected,
+                        onSelected: (_) async {
+                          Navigator.pop(context);
+                          await _setAccompaniment(ref, day, mealType, assignment, acc);
+                        },
+                        selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                        labelStyle: TextStyle(
+                          color: isSelected ? AppColors.primary : null,
+                          fontWeight: isSelected ? FontWeight.bold : null,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Set accompaniment for a meal
+  Future<void> _setAccompaniment(
+    WidgetRef ref,
+    DateTime day,
+    String mealType,
+    MealAssignment assignment,
+    String? accompaniment,
+  ) async {
+    final familyId = ref.read(currentFamilyIdProvider);
+    if (familyId == null) return;
+
+    final updatedAssignment = MealAssignment(
+      dishes: assignment.dishes,
+      accompaniment: accompaniment,
+      note: assignment.note,
+    );
+
+    await ref.read(mealPlanRepositoryProvider).setMeal(
+          familyId: familyId,
+          date: day,
+          mealType: mealType,
+          assignment: updatedAssignment,
+        );
+  }
+
   void _showRecipeSelector(
     BuildContext context,
     WidgetRef ref,
@@ -378,6 +500,14 @@ class WeeklyPlannerScreen extends ConsumerWidget {
             onSelectFrozen: (dish) {
               Navigator.pop(context);
               _addMealFromFreezer(context, ref, day, mealType, dish, currentAssignment);
+            },
+            onSelectQuickDish: (quickDish) {
+              Navigator.pop(context);
+              _addMealFromQuickDish(ref, day, mealType, quickDish, currentAssignment);
+            },
+            onCreateQuickDish: (name, categories) async {
+              Navigator.pop(context);
+              await _createAndAddQuickDish(ref, day, mealType, name, categories, currentAssignment);
             },
           );
         },
@@ -472,6 +602,85 @@ class WeeklyPlannerScreen extends ConsumerWidget {
     }
   }
 
+  /// Add meal from a quick dish
+  Future<void> _addMealFromQuickDish(
+    WidgetRef ref,
+    DateTime day,
+    String mealType,
+    QuickDish quickDish,
+    MealAssignment? currentAssignment,
+  ) async {
+    final familyId = ref.read(currentFamilyIdProvider);
+    if (familyId == null) return;
+
+    // Create new dish assignment
+    final newDish = DishAssignment(
+      dishId: 'quick_${quickDish.id}',
+      dishName: quickDish.name,
+      categories: quickDish.categories.map((c) => c.name).toList(),
+    );
+
+    // Add to existing dishes or create new assignment
+    final dishes = currentAssignment != null
+        ? [...currentAssignment.dishes, newDish]
+        : [newDish];
+
+    await ref.read(mealPlanRepositoryProvider).setMeal(
+          familyId: familyId,
+          date: day,
+          mealType: mealType,
+          assignment: MealAssignment(
+            dishes: dishes,
+            accompaniment: currentAssignment?.accompaniment,
+          ),
+        );
+
+    // Increment usage count
+    await ref.read(quickDishRepositoryProvider).incrementUsage(familyId, quickDish.id);
+  }
+
+  /// Create a new quick dish and add it to the meal
+  Future<void> _createAndAddQuickDish(
+    WidgetRef ref,
+    DateTime day,
+    String mealType,
+    String name,
+    List<DishCategory> categories,
+    MealAssignment? currentAssignment,
+  ) async {
+    final familyId = ref.read(currentFamilyIdProvider);
+    if (familyId == null) return;
+
+    // Create the quick dish
+    final quickDish = await ref.read(quickDishRepositoryProvider).createQuickDish(
+          familyId: familyId,
+          name: name,
+          categories: categories,
+        );
+
+    // Create new dish assignment
+    final newDish = DishAssignment(
+      dishId: 'quick_${quickDish.id}',
+      dishName: quickDish.name,
+      categories: quickDish.categories.map((c) => c.name).toList(),
+    );
+
+    // Add to existing dishes or create new assignment
+    final dishes = currentAssignment != null
+        ? [...currentAssignment.dishes, newDish]
+        : [newDish];
+
+    await ref.read(mealPlanRepositoryProvider).setMeal(
+          familyId: familyId,
+          date: day,
+          mealType: mealType,
+          assignment: MealAssignment(
+            dishes: dishes,
+            accompaniment: currentAssignment?.accompaniment,
+          ),
+        );
+  }
+
   /// Show dialog to select number of portions
   Future<int?> _showPortionsDialog(BuildContext context, Dish dish) async {
     int selectedPortions = 1;
@@ -533,6 +742,7 @@ class WeeklyPlannerScreen extends ConsumerWidget {
   }
 
   Future<void> _removeMeal(
+    BuildContext context,
     WidgetRef ref,
     DateTime day,
     String mealType,
@@ -540,11 +750,90 @@ class WeeklyPlannerScreen extends ConsumerWidget {
     final familyId = ref.read(currentFamilyIdProvider);
     if (familyId == null) return;
 
-    await ref.read(mealPlanRepositoryProvider).removeMeal(
-          familyId: familyId,
-          date: day,
-          mealType: mealType,
-        );
+    // Get current meal assignment to check for frozen dishes
+    final mealPlan = ref.read(currentMealPlanProvider).value;
+    final dayMeals = mealPlan?.getMealsForDate(day);
+    final assignment = dayMeals?.getMeal(mealType);
+
+    // Find dishes from freezer
+    final frozenDishes = assignment?.dishes
+            .where((d) => d.fromFreezer && d.portionsUsed > 0)
+            .toList() ??
+        [];
+
+    // If there are frozen dishes, ask for confirmation to restore portions
+    if (frozenDishes.isNotEmpty) {
+      final totalPortions =
+          frozenDishes.fold<int>(0, (sum, d) => sum + d.portionsUsed);
+      final dishNames = frozenDishes.map((d) => d.dishName).join(', ');
+
+      final shouldRestore = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Supprimer le repas?'),
+          content: Text(
+            'Ce repas contient $totalPortions portion(s) du congelateur ($dishNames).\n\n'
+            'Voulez-vous remettre ces portions au congelateur?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, null), // Cancel
+              child: const Text('Annuler'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false), // Delete without restore
+              style: TextButton.styleFrom(foregroundColor: AppColors.error),
+              child: const Text('Supprimer sans restaurer'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true), // Restore
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Restaurer au congelo'),
+            ),
+          ],
+        ),
+      );
+
+      // User cancelled
+      if (shouldRestore == null) return;
+
+      // Remove the meal
+      await ref.read(mealPlanRepositoryProvider).removeMeal(
+            familyId: familyId,
+            date: day,
+            mealType: mealType,
+          );
+
+      // Restore portions if requested
+      if (shouldRestore) {
+        for (final dish in frozenDishes) {
+          await ref.read(dishRepositoryProvider).addToFreezer(
+                familyId: familyId,
+                dishId: dish.dishId,
+                portions: dish.portionsUsed,
+              );
+        }
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$totalPortions portion(s) remise(s) au congelateur'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      }
+    } else {
+      // No frozen dishes, just remove the meal
+      await ref.read(mealPlanRepositoryProvider).removeMeal(
+            familyId: familyId,
+            date: day,
+            mealType: mealType,
+          );
+    }
   }
 
   void _showCopyDialog(BuildContext context, WidgetRef ref, DateTime weekStart) {
@@ -626,16 +915,20 @@ class WeeklyPlannerScreen extends ConsumerWidget {
   }
 }
 
-/// Bottom sheet for selecting a recipe or frozen dish
+/// Bottom sheet for selecting a recipe, frozen dish, or quick dish
 class _RecipeSelectorSheet extends ConsumerStatefulWidget {
   final ScrollController scrollController;
   final Function(Recipe) onSelectRecipe;
   final Function(Dish) onSelectFrozen;
+  final Function(QuickDish) onSelectQuickDish;
+  final Function(String name, List<DishCategory> categories) onCreateQuickDish;
 
   const _RecipeSelectorSheet({
     required this.scrollController,
     required this.onSelectRecipe,
     required this.onSelectFrozen,
+    required this.onSelectQuickDish,
+    required this.onCreateQuickDish,
   });
 
   @override
@@ -647,14 +940,19 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
   String _searchQuery = '';
   late TabController _tabController;
 
+  // Quick dish creation state
+  final _quickDishNameController = TextEditingController();
+  final Set<DishCategory> _selectedCategories = {};
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
   void dispose() {
+    _quickDishNameController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -664,6 +962,7 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
     final recipesAsync = ref.watch(familyRecipesProvider);
     final pantryNames = ref.watch(availableIngredientNamesProvider);
     final frozenDishes = ref.watch(frozenDishesProvider);
+    final quickDishes = ref.watch(familyQuickDishesProvider);
 
     return Column(
       children: [
@@ -684,13 +983,14 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
           labelColor: AppColors.primaryDark,
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.primaryDark,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 8),
           tabs: [
             const Tab(
-              icon: Icon(Icons.restaurant_menu, size: 20),
+              icon: Icon(Icons.restaurant_menu, size: 18),
               text: 'Recettes',
             ),
             Tab(
-              icon: const Icon(Icons.ac_unit, size: 20),
+              icon: const Icon(Icons.ac_unit, size: 18),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -698,15 +998,15 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                   frozenDishes.when(
                     data: (dishes) => dishes.isNotEmpty
                         ? Container(
-                            margin: const EdgeInsets.only(left: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            margin: const EdgeInsets.only(left: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                             decoration: BoxDecoration(
                               color: AppColors.info,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
                               '${dishes.length}',
-                              style: const TextStyle(color: Colors.white, fontSize: 11),
+                              style: const TextStyle(color: Colors.white, fontSize: 10),
                             ),
                           )
                         : const SizedBox.shrink(),
@@ -715,6 +1015,10 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                   ),
                 ],
               ),
+            ),
+            const Tab(
+              icon: Icon(Icons.flash_on, size: 18),
+              text: 'Rapide',
             ),
           ],
         ),
@@ -748,6 +1052,8 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
               _buildRecipesList(recipesAsync, pantryNames),
               // Tab 2: Frozen dishes
               _buildFrozenList(frozenDishes),
+              // Tab 3: Quick dishes
+              _buildQuickDishList(quickDishes),
             ],
           ),
         ),
@@ -933,6 +1239,184 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
     if (percent >= 0.8) return AppColors.success;
     if (percent >= 0.5) return AppColors.warning;
     return AppColors.info;
+  }
+
+  Widget _buildQuickDishList(AsyncValue<List<QuickDish>> quickDishesAsync) {
+    return quickDishesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Erreur: $e')),
+      data: (quickDishes) {
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Quick creation form
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Ajouter un plat rapide',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _quickDishNameController,
+                            decoration: const InputDecoration(
+                              hintText: 'Nom du plat...',
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                            ),
+                            textCapitalization: TextCapitalization.sentences,
+                            onSubmitted: (_) => _submitQuickDish(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: _submitQuickDish,
+                          icon: const Icon(Icons.add_circle),
+                          color: AppColors.primary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Category chips
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        DishCategory.vegetable,
+                        DishCategory.starch,
+                        DishCategory.protein,
+                        DishCategory.complete,
+                      ].map((category) {
+                        final isSelected = _selectedCategories.contains(category);
+                        return FilterChip(
+                          label: Text(
+                            '${category.icon} ${category.label}',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedCategories.add(category);
+                              } else {
+                                _selectedCategories.remove(category);
+                              }
+                            });
+                          },
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Divider(),
+
+              // Existing quick dishes
+              if (quickDishes.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.flash_on, size: 48, color: AppColors.textHint),
+                        SizedBox(height: 16),
+                        Text(
+                          'Aucun plat rapide',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Creez des plats simples pour les reutiliser',
+                          style: TextStyle(fontSize: 12, color: AppColors.textHint),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    'Plats recents (${quickDishes.length})',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                ...quickDishes.map((quickDish) => ListTile(
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: Text(
+                            quickDish.categoriesDisplay.isNotEmpty
+                                ? quickDish.categoriesDisplay
+                                : '🍽️',
+                            style: const TextStyle(fontSize: 18),
+                          ),
+                        ),
+                      ),
+                      title: Text(quickDish.name),
+                      subtitle: Text(
+                        'Utilise ${quickDish.usageCount}x',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceVariant,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${quickDish.usageCount}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      onTap: () => widget.onSelectQuickDish(quickDish),
+                    )),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _submitQuickDish() {
+    final name = _quickDishNameController.text.trim();
+    if (name.isEmpty) return;
+
+    widget.onCreateQuickDish(name, _selectedCategories.toList());
+    _quickDishNameController.clear();
+    setState(() {
+      _selectedCategories.clear();
+    });
   }
 }
 

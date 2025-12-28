@@ -47,13 +47,13 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Frigo'),
+        title: const Text('Stock'),
         bottom: TabBar(
           controller: _tabController,
           tabs: [
             const Tab(
               icon: Icon(Icons.kitchen),
-              text: 'Ingredients',
+              text: 'Frigo',
             ),
             Tab(
               icon: const Icon(Icons.ac_unit),
@@ -947,7 +947,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Vider le frigo?'),
+        title: const Text('Vider le stock?'),
         content: const Text('Les ingredients de base seront conserves.'),
         actions: [
           TextButton(

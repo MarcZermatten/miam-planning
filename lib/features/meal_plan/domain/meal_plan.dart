@@ -88,13 +88,30 @@ class DishAssignment {
   bool get isComplete => hasCategory(DishCategory.complete);
 }
 
+/// Default accompaniment options
+const List<String> defaultAccompaniments = [
+  'Pâtes',
+  'Riz',
+  'Ébly',
+  'Couscous',
+  'Boulgour',
+  'Pommes de terre',
+  'Purée',
+  'Pain',
+  'Quinoa',
+  'Polenta',
+  'Semoule',
+];
+
 /// A meal assignment containing one or more dishes
 class MealAssignment {
   final List<DishAssignment> dishes;
+  final String? accompaniment; // Optional side dish: "Pâtes", "Riz", etc.
   final String? note;
 
   MealAssignment({
     this.dishes = const [],
+    this.accompaniment,
     this.note,
   });
 
@@ -155,6 +172,7 @@ class MealAssignment {
               ?.map((e) => DishAssignment.fromMap(e as Map<String, dynamic>))
               .toList() ??
           [],
+      accompaniment: map['accompaniment'],
       note: map['note'],
     );
   }
@@ -162,8 +180,21 @@ class MealAssignment {
   Map<String, dynamic> toMap() {
     return {
       'dishes': dishes.map((d) => d.toMap()).toList(),
+      if (accompaniment != null) 'accompaniment': accompaniment,
       'note': note,
     };
+  }
+
+  MealAssignment copyWith({
+    List<DishAssignment>? dishes,
+    String? accompaniment,
+    String? note,
+  }) {
+    return MealAssignment(
+      dishes: dishes ?? this.dishes,
+      accompaniment: accompaniment ?? this.accompaniment,
+      note: note ?? this.note,
+    );
   }
 
   /// Check if this meal has any dishes assigned
@@ -181,6 +212,7 @@ class MealAssignment {
   MealAssignment addDish(DishAssignment dish) {
     return MealAssignment(
       dishes: [...dishes, dish],
+      accompaniment: accompaniment,
       note: note,
     );
   }
@@ -189,6 +221,7 @@ class MealAssignment {
   MealAssignment removeDish(String dishId) {
     return MealAssignment(
       dishes: dishes.where((d) => d.dishId != dishId).toList(),
+      accompaniment: accompaniment,
       note: note,
     );
   }
@@ -197,17 +230,8 @@ class MealAssignment {
   MealAssignment updateDish(String dishId, DishAssignment updated) {
     return MealAssignment(
       dishes: dishes.map((d) => d.dishId == dishId ? updated : d).toList(),
+      accompaniment: accompaniment,
       note: note,
-    );
-  }
-
-  MealAssignment copyWith({
-    List<DishAssignment>? dishes,
-    String? note,
-  }) {
-    return MealAssignment(
-      dishes: dishes ?? this.dishes,
-      note: note ?? this.note,
     );
   }
 }
