@@ -306,4 +306,36 @@ class FamilyRepository {
     final random = Random.secure();
     return List.generate(6, (_) => chars[random.nextInt(chars.length)]).join();
   }
+
+  /// Recover family memberships by searching all families where user is a member
+  /// This is a fallback when the user document is missing or has empty familyIds
+  Future<List<Family>> recoverUserFamilies(String userId) async {
+    final recoveredFamilies = <Family>[];
+
+    // Get all families (this could be optimized with a collection group query on members)
+    final familiesSnapshot = await _familiesRef.get();
+
+    for (final familyDoc in familiesSnapshot.docs) {
+      // Check if user is a member of this family
+      final memberQuery = await _membersRef(familyDoc.id)
+          .where('odauyX6H2Z', isEqualTo: userId)
+          .limit(1)
+          .get();
+
+      if (memberQuery.docs.isNotEmpty) {
+        recoveredFamilies.add(Family.fromFirestore(familyDoc));
+      }
+    }
+
+    // If we found families, restore the user document
+    if (recoveredFamilies.isNotEmpty) {
+      final familyIds = recoveredFamilies.map((f) => f.id).toList();
+      await _firestore.collection('users').doc(userId).set({
+        'familyIds': familyIds,
+      }, SetOptions(merge: true));
+      print('Recovered ${recoveredFamilies.length} family memberships for user $userId');
+    }
+
+    return recoveredFamilies;
+  }
 }

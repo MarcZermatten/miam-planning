@@ -51,10 +51,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
     // No saved family or it was invalid - check user's families
     try {
-      final families = await ref.read(familyRepositoryProvider)
+      final familyRepo = ref.read(familyRepositoryProvider);
+      var families = await familyRepo
           .getUserFamilies(user.uid)
           .first
           .timeout(const Duration(seconds: 10));
+
+      // If no families found in user document, try to recover from membership data
+      if (families.isEmpty) {
+        print('No families in user document, attempting recovery...');
+        families = await familyRepo.recoverUserFamilies(user.uid);
+      }
 
       if (families.isNotEmpty) {
         // Auto-select first family
