@@ -902,20 +902,20 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
   void _showLeaveDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Quitter la famille?'),
         content: const Text(
           'Vous ne pourrez plus acceder aux recettes et plannings de cette famille.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Annuler'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: Implement leave family
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await _leaveFamily();
             },
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Quitter'),
@@ -923,6 +923,49 @@ class _FamilySettingsScreenState extends ConsumerState<FamilySettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _leaveFamily() async {
+    final familyId = ref.read(currentFamilyIdProvider);
+    final currentUser = ref.read(currentUserProvider);
+    final members = ref.read(familyMembersProvider).value ?? [];
+
+    if (familyId == null || currentUser == null) return;
+
+    // Find current user's member record
+    final myMember = members.where((m) => m.odauyX6H2Z == currentUser.uid).firstOrNull;
+    if (myMember == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erreur: membre non trouve')),
+      );
+      return;
+    }
+
+    try {
+      // Remove member from family
+      await ref.read(familyRepositoryProvider).removeMember(
+        familyId,
+        myMember.id,
+        currentUser.uid,
+      );
+
+      // Clear current family selection
+      ref.read(currentFamilyIdProvider.notifier).clearFamilyId();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vous avez quitte la famille')),
+        );
+        // Go to family setup to join/create another family
+        context.go(AppRoutes.familySetup);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    }
   }
 
   void _showLogoutDialog(BuildContext context) {
