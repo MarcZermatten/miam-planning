@@ -37,10 +37,14 @@ class HomeScreen extends ConsumerWidget {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset(
-              'assets/popote_logo.png',
-              height: 32,
-              width: 32,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/popote_logo.png',
+                height: 32,
+                width: 32,
+                fit: BoxFit.cover,
+              ),
             ),
             const SizedBox(width: 8),
             const Text('Popote'),
