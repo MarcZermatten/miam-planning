@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../family/data/family_repository.dart';
@@ -8,6 +7,8 @@ import '../../dishes/data/dish_repository.dart';
 import '../../dishes/domain/dish.dart';
 import '../../recipes/data/recipe_repository.dart';
 import '../../recipes/domain/recipe.dart';
+import '../../wine/data/wine_repository.dart';
+import '../../wine/domain/wine_bottle.dart';
 import '../data/pantry_repository.dart';
 import '../domain/pantry_item.dart';
 
@@ -37,7 +38,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
   @override
   Widget build(BuildContext context) {
     final pantryItems = ref.watch(pantryItemsProvider);
-    final suggestions = ref.watch(suggestedRecipesProvider);
+    final wineBottles = ref.watch(wineBottlesProvider);
     final frozenDishes = ref.watch(frozenDishesProvider);
     final frozenCount = frozenDishes.when(
       data: (dishes) => dishes.fold<int>(0, (sum, d) => sum + d.frozenPortions),
@@ -60,8 +61,12 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
               text: 'Congelo${frozenCount > 0 ? ' ($frozenCount)' : ''}',
             ),
             Tab(
-              icon: const Icon(Icons.lightbulb_outline),
-              text: 'Suggestions (${suggestions.length})',
+              icon: const Icon(Icons.wine_bar),
+              text: wineBottles.when(
+                data: (wines) => wines.isEmpty ? 'Vin' : 'Vin (${wines.fold<int>(0, (sum, w) => sum + w.quantity)})',
+                loading: () => 'Vin',
+                error: (_, __) => 'Vin',
+              ),
             ),
           ],
         ),
@@ -108,14 +113,27 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                 ? _buildEmptyFreezerState()
                 : _buildFreezerList(dishes),
           ),
-          // Tab 3: Recipe suggestions
-          suggestions.isEmpty
-              ? _buildNoSuggestionsState()
-              : _buildSuggestionsList(suggestions),
+          // Tab 3: Wine cellar
+          wineBottles.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('Erreur: $e')),
+            data: (wines) => wines.isEmpty
+                ? _buildEmptyWineState()
+                : _buildWineList(wines),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddDialog,
+        onPressed: () {
+          switch (_tabController.index) {
+            case 0:
+              _showAddDialog();
+            case 1:
+              _showAddFreezerDialog();
+            case 2:
+              _showAddWineDialog();
+          }
+        },
         child: const Icon(Icons.add),
       ),
     );
@@ -273,19 +291,19 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
     );
   }
 
-  Widget _buildNoSuggestionsState() {
+  Widget _buildEmptyWineState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.lightbulb_outline,
+            Icons.wine_bar,
             size: 64,
             color: context.colorTextHint,
           ),
           const SizedBox(height: 16),
           Text(
-            'Pas de suggestions',
+            'Cave vide',
             style: TextStyle(
               fontSize: 18,
               color: context.colorTextSecondary,
@@ -293,9 +311,15 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'Ajoutez des ingredients pour voir les recettes possibles',
+            'Ajoutez vos bouteilles de vin',
             style: TextStyle(color: context.colorTextHint),
             textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _showAddWineDialog,
+            icon: const Icon(Icons.add),
+            label: const Text('Ajouter une bouteille'),
           ),
         ],
       ),
@@ -598,97 +622,434 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
         );
   }
 
-  Widget _buildSuggestionsList(List<RecipeSuggestion> suggestions) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: suggestions.length,
-      itemBuilder: (context, index) {
-        final suggestion = suggestions[index];
-        return _buildSuggestionCard(suggestion);
-      },
+  // ===== WINE TAB =====
+
+  String _sortBy = 'addedAt';
+  String? _filterType;
+  String _searchQuery = '';
+
+  Widget _buildWineList(List<WineBottle> wines) {
+    // Filter wines
+    var filteredWines = wines.where((wine) {
+      if (_filterType != null && wine.type.name != _filterType) return false;
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        return wine.name.toLowerCase().contains(query) ||
+            (wine.grape?.toLowerCase().contains(query) ?? false);
+      }
+      return true;
+    }).toList();
+
+    // Sort wines
+    filteredWines.sort((a, b) {
+      switch (_sortBy) {
+        case 'name':
+          return a.name.compareTo(b.name);
+        case 'year':
+          return (b.year ?? 0).compareTo(a.year ?? 0);
+        case 'type':
+          return a.type.index.compareTo(b.type.index);
+        default:
+          return b.addedAt.compareTo(a.addedAt);
+      }
+    });
+
+    return Column(
+      children: [
+        // Search and filter bar
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              TextField(
+                decoration: InputDecoration(
+                  hintText: 'Rechercher...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+                onChanged: (value) => setState(() => _searchQuery = value),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  // Type filter chips
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          FilterChip(
+                            label: const Text('Tous'),
+                            selected: _filterType == null,
+                            onSelected: (_) => setState(() => _filterType = null),
+                          ),
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            label: const Text('Rouge'),
+                            selected: _filterType == 'red',
+                            selectedColor: Colors.red.shade100,
+                            onSelected: (_) => setState(() => _filterType = _filterType == 'red' ? null : 'red'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            label: const Text('Blanc'),
+                            selected: _filterType == 'white',
+                            selectedColor: Colors.amber.shade100,
+                            onSelected: (_) => setState(() => _filterType = _filterType == 'white' ? null : 'white'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            label: const Text('Rosé'),
+                            selected: _filterType == 'rose',
+                            selectedColor: Colors.pink.shade100,
+                            onSelected: (_) => setState(() => _filterType = _filterType == 'rose' ? null : 'rose'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Sort dropdown
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.sort),
+                    tooltip: 'Trier',
+                    onSelected: (value) => setState(() => _sortBy = value),
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'addedAt',
+                        child: Row(
+                          children: [
+                            Icon(_sortBy == 'addedAt' ? Icons.check : null, size: 18),
+                            const SizedBox(width: 8),
+                            const Text('Date d\'ajout'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'name',
+                        child: Row(
+                          children: [
+                            Icon(_sortBy == 'name' ? Icons.check : null, size: 18),
+                            const SizedBox(width: 8),
+                            const Text('Nom'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'year',
+                        child: Row(
+                          children: [
+                            Icon(_sortBy == 'year' ? Icons.check : null, size: 18),
+                            const SizedBox(width: 8),
+                            const Text('Année'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'type',
+                        child: Row(
+                          children: [
+                            Icon(_sortBy == 'type' ? Icons.check : null, size: 18),
+                            const SizedBox(width: 8),
+                            const Text('Type'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        // Wine list
+        Expanded(
+          child: filteredWines.isEmpty
+              ? Center(
+                  child: Text(
+                    'Aucun vin trouvé',
+                    style: TextStyle(color: context.colorTextHint),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: filteredWines.length,
+                  itemBuilder: (context, index) {
+                    return _buildWineCard(filteredWines[index]);
+                  },
+                ),
+        ),
+      ],
     );
   }
 
-  Widget _buildSuggestionCard(RecipeSuggestion suggestion) {
-    final recipe = suggestion.recipe;
-    final matchColor = suggestion.matchPercent >= 0.8
-        ? AppColors.success
-        : suggestion.matchPercent >= 0.6
-            ? AppColors.warning
-            : AppColors.info;
+  Widget _buildWineCard(WineBottle wine) {
+    final typeColor = switch (wine.type) {
+      WineType.red => Colors.red.shade700,
+      WineType.white => Colors.amber.shade700,
+      WineType.rose => Colors.pink.shade400,
+    };
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: () => context.push('/recipes/${recipe.id}'),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final familyId = ref.read(currentFamilyIdProvider);
+    if (familyId == null) return const SizedBox.shrink();
+
+    return Dismissible(
+      key: Key(wine.id),
+      background: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        color: Colors.green,
+        child: const Icon(Icons.remove, color: Colors.white),
+      ),
+      secondaryBackground: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: Colors.red,
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.startToEnd) {
+          // Decrease quantity
+          await ref.read(wineRepositoryProvider).updateQuantity(
+            familyId,
+            wine.id,
+            wine.quantity - 1,
+          );
+          return false;
+        } else {
+          // Delete confirmation
+          return await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Supprimer'),
+              content: Text('Supprimer "${wine.name}" ?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Annuler'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Supprimer', style: TextStyle(color: AppColors.error)),
+                ),
+              ],
+            ),
+          ) ?? false;
+        }
+      },
+      onDismissed: (_) {
+        ref.read(wineRepositoryProvider).deleteWineBottle(familyId, wine.id);
+      },
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: ListTile(
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: typeColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.wine_bar, color: typeColor),
+          ),
+          title: Text(
+            wine.name,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            [
+              wine.typeLabel,
+              if (wine.grape != null) wine.grape,
+              if (wine.year != null) wine.year.toString(),
+            ].join(' • '),
+            style: TextStyle(color: context.colorTextSecondary, fontSize: 13),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
+              IconButton(
+                icon: const Icon(Icons.remove_circle_outline),
+                onPressed: () {
+                  ref.read(wineRepositoryProvider).updateQuantity(
+                    familyId,
+                    wine.id,
+                    wine.quantity - 1,
+                  );
+                },
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: typeColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${wine.quantity}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: typeColor,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline),
+                onPressed: () {
+                  ref.read(wineRepositoryProvider).updateQuantity(
+                    familyId,
+                    wine.id,
+                    wine.quantity + 1,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAddWineDialog() {
+    final nameController = TextEditingController();
+    final grapeController = TextEditingController();
+    final yearController = TextEditingController();
+    WineType selectedType = WineType.red;
+    int quantity = 1;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Ajouter une bouteille',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nom du vin *',
+                  border: OutlineInputBorder(),
+                ),
+                textCapitalization: TextCapitalization.sentences,
+                autofocus: true,
+              ),
+              const SizedBox(height: 12),
+              // Wine type selector
+              SegmentedButton<WineType>(
+                segments: const [
+                  ButtonSegment(
+                    value: WineType.red,
+                    label: Text('Rouge'),
+                    icon: Icon(Icons.wine_bar),
+                  ),
+                  ButtonSegment(
+                    value: WineType.white,
+                    label: Text('Blanc'),
+                    icon: Icon(Icons.wine_bar),
+                  ),
+                  ButtonSegment(
+                    value: WineType.rose,
+                    label: Text('Rosé'),
+                    icon: Icon(Icons.wine_bar),
+                  ),
+                ],
+                selected: {selectedType},
+                onSelectionChanged: (types) {
+                  setSheetState(() => selectedType = types.first);
+                },
+              ),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      recipe.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
+                    child: TextField(
+                      controller: grapeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Cépage',
+                        border: OutlineInputBorder(),
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      textCapitalization: TextCapitalization.sentences,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: matchColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      suggestion.matchLabel,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: matchColor,
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 100,
+                    child: TextField(
+                      controller: yearController,
+                      decoration: const InputDecoration(
+                        labelText: 'Année',
+                        border: OutlineInputBorder(),
                       ),
+                      keyboardType: TextInputType.number,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                '${suggestion.matchedIngredients}/${suggestion.totalIngredients} ingredients disponibles',
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
+              const SizedBox(height: 12),
+              // Quantity selector
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Quantité: '),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: quantity > 1
+                        ? () => setSheetState(() => quantity--)
+                        : null,
+                  ),
+                  Text(
+                    '$quantity',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline),
+                    onPressed: () => setSheetState(() => quantity++),
+                  ),
+                ],
               ),
-              if (suggestion.missingIngredients.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: suggestion.missingIngredients.take(3).map((name) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.error.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '- $name',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.error,
-                        ),
-                      ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  if (nameController.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Le nom est requis')),
                     );
-                  }).toList(),
-                ),
-              ],
+                    return;
+                  }
+                  final familyId = ref.read(currentFamilyIdProvider);
+                  if (familyId == null) return;
+
+                  await ref.read(wineRepositoryProvider).addWineBottle(
+                    familyId: familyId,
+                    name: nameController.text.trim(),
+                    type: selectedType,
+                    grape: grapeController.text.trim().isEmpty
+                        ? null
+                        : grapeController.text.trim(),
+                    year: int.tryParse(yearController.text),
+                    quantity: quantity,
+                  );
+                  if (context.mounted) Navigator.pop(context);
+                },
+                child: const Text('Ajouter'),
+              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),

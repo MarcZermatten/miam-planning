@@ -133,28 +133,12 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildQuickAction(
-                    context,
-                    'Ajouter recette',
-                    Icons.add_circle_outline,
-                    AppColors.primaryMedium,
-                    () => context.push(AppRoutes.addRecipe),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildQuickAction(
-                    context,
-                    'Liste courses',
-                    Icons.shopping_cart_outlined,
-                    AppColors.secondaryMedium,
-                    () => context.go(AppRoutes.shopping),
-                  ),
-                ),
-              ],
+            _buildQuickAction(
+              context,
+              'Ajouter recette',
+              Icons.add_circle_outline,
+              AppColors.primaryMedium,
+              () => context.push(AppRoutes.addRecipe),
             ),
             const SizedBox(height: 24),
 

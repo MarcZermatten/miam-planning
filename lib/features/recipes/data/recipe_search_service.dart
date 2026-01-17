@@ -57,20 +57,14 @@ extension RecipeProviderExtension on RecipeProvider {
       case RecipeProvider.spoonacular:
       case RecipeProvider.marmiton:
       case RecipeProvider.cuisineAz:
-        return true;
       case RecipeProvider.bettyBossi:
-        return false; // En développement
+        return true;
     }
   }
 
   /// Status message for unavailable providers
   String? get statusMessage {
-    switch (this) {
-      case RecipeProvider.bettyBossi:
-        return 'En développement';
-      default:
-        return null;
-    }
+    return null;
   }
 }
 
@@ -124,7 +118,7 @@ class RecipeSearchService {
       case RecipeProvider.cuisineAz:
         return _searchCuisineAz(query, maxResults);
       case RecipeProvider.bettyBossi:
-        return []; // En développement
+        return _searchBettyBossi(query, maxResults);
     }
   }
 
@@ -265,63 +259,286 @@ class RecipeSearchService {
     }
   }
 
-  /// Search Betty Bossi
+  /// Search Betty Bossi with multiple robust fallback strategies
   static Future<List<RecipeSearchResult>> _searchBettyBossi(
     String query,
     int maxResults,
   ) async {
-    try {
-      final encodedQuery = Uri.encodeComponent(query);
-      // Betty Bossi new URL structure (2024+)
-      final url = 'https://www.bettybossi.ch/fr/suche?query=$encodedQuery&tab=rezepte';
+    final results = <RecipeSearchResult>[];
+    final seenUrls = <String>{};
 
-      final response = await http.get(Uri.parse(url), headers: _headers);
-      if (response.statusCode != 200) {
-        // Try alternative URL
-        final altUrl = 'https://www.bettybossi.ch/fr/Rezept/Suche?query=$encodedQuery';
-        final altResponse = await http.get(Uri.parse(altUrl), headers: _headers);
-        if (altResponse.statusCode != 200) return [];
+    // Strategy 1: Try direct Betty Bossi search endpoints
+    try {
+      final directResults = await _bettyBossiDirectSearch(query, maxResults);
+      for (final r in directResults) {
+        if (!seenUrls.contains(r.url)) {
+          seenUrls.add(r.url);
+          results.add(r);
+        }
       }
+    } catch (e) {
+      print('Betty Bossi direct search failed: $e');
+    }
+
+    // Strategy 2: Scrape the recipe hub page filtered by query
+    if (results.length < maxResults) {
+      try {
+        final hubResults = await _bettyBossiHubScrape(query, maxResults - results.length);
+        for (final r in hubResults) {
+          if (!seenUrls.contains(r.url)) {
+            seenUrls.add(r.url);
+            results.add(r);
+          }
+        }
+      } catch (e) {
+        print('Betty Bossi hub scrape failed: $e');
+      }
+    }
+
+    // Strategy 3: Use DuckDuckGo as fallback to find Betty Bossi recipes
+    if (results.length < maxResults) {
+      try {
+        final ddgResults = await _bettyBossiViaDuckDuckGo(query, maxResults - results.length);
+        for (final r in ddgResults) {
+          if (!seenUrls.contains(r.url)) {
+            seenUrls.add(r.url);
+            results.add(r);
+          }
+        }
+      } catch (e) {
+        print('Betty Bossi DuckDuckGo fallback failed: $e');
+      }
+    }
+
+    return results;
+  }
+
+  /// Direct search on Betty Bossi site
+  static Future<List<RecipeSearchResult>> _bettyBossiDirectSearch(
+    String query,
+    int maxResults,
+  ) async {
+    final encodedQuery = Uri.encodeComponent(query);
+    final results = <RecipeSearchResult>[];
+
+    // Try multiple URL patterns
+    final urls = [
+      'https://www.bettybossi.ch/fr/recettes/?query=$encodedQuery',
+      'https://www.bettybossi.ch/fr/Rezept/ShowResults/?text=$encodedQuery',
+      'https://www.bettybossi.ch/fr/suche?query=$encodedQuery&tab=rezepte',
+      'https://www.bettybossi.ch/de/Rezept/ShowResults/?text=$encodedQuery',
+    ];
+
+    for (final url in urls) {
+      if (results.length >= maxResults) break;
+
+      try {
+        final response = await http.get(Uri.parse(url), headers: _headers);
+        if (response.statusCode != 200) continue;
+
+        final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+        final parsed = _parseBettyBossiPage(body, maxResults - results.length);
+        results.addAll(parsed);
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return results;
+  }
+
+  /// Scrape the Betty Bossi recipe hub and filter by query
+  static Future<List<RecipeSearchResult>> _bettyBossiHubScrape(
+    String query,
+    int maxResults,
+  ) async {
+    final results = <RecipeSearchResult>[];
+    final queryWords = query.toLowerCase().split(' ');
+
+    // Try the main recipe pages
+    final hubUrls = [
+      'https://www.bettybossi.ch/fr/recettes/',
+      'https://www.bettybossi.ch/fr/recettes/poulet/',
+      'https://www.bettybossi.ch/fr/recettes/pates/',
+      'https://www.bettybossi.ch/fr/recettes/soupes/',
+    ];
+
+    for (final url in hubUrls) {
+      if (results.length >= maxResults) break;
+
+      try {
+        final response = await http.get(Uri.parse(url), headers: _headers);
+        if (response.statusCode != 200) continue;
+
+        final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+        final allRecipes = _parseBettyBossiPage(body, 100);
+
+        // Filter by query words
+        for (final recipe in allRecipes) {
+          if (results.length >= maxResults) break;
+
+          final titleLower = recipe.title.toLowerCase();
+          final urlLower = recipe.url.toLowerCase();
+
+          // Check if any query word matches
+          final matches = queryWords.any((word) =>
+            titleLower.contains(word) || urlLower.contains(word));
+
+          if (matches) {
+            results.add(recipe);
+          }
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return results;
+  }
+
+  /// Fallback: Search via DuckDuckGo for Betty Bossi recipes
+  static Future<List<RecipeSearchResult>> _bettyBossiViaDuckDuckGo(
+    String query,
+    int maxResults,
+  ) async {
+    final results = <RecipeSearchResult>[];
+    final encodedQuery = Uri.encodeComponent('site:bettybossi.ch recette $query');
+
+    try {
+      // DuckDuckGo HTML search
+      final url = 'https://html.duckduckgo.com/html/?q=$encodedQuery';
+      final response = await http.get(Uri.parse(url), headers: _headers);
+
+      if (response.statusCode != 200) return results;
 
       final body = utf8.decode(response.bodyBytes, allowMalformed: true);
       final document = html_parser.parse(body);
 
-      final results = <RecipeSearchResult>[];
-      final seenUrls = <String>{};
+      // Parse DuckDuckGo results
+      final searchResults = document.querySelectorAll('.result, .results_links');
 
-      // Try multiple selector strategies
-      var cards = document.querySelectorAll('a[href*="/rezept/"], a[href*="/Rezept/"]');
-      if (cards.isEmpty) {
-        cards = document.querySelectorAll('[class*="recipe"], article, .teaser, [class*="card"]');
-      }
-
-      for (final card in cards) {
+      for (final result in searchResults) {
         if (results.length >= maxResults) break;
 
         try {
-          // Get link
-          String? link = card.attributes['href'];
-          if (link == null || link.isEmpty) {
-            final linkEl = card.querySelector('a[href*="/rezept/"], a[href*="/Rezept/"]');
-            link = linkEl?.attributes['href'];
-          }
-          if (link == null || link.isEmpty) continue;
-          if (!link.toLowerCase().contains('rezept')) continue;
+          // Get the link
+          final linkEl = result.querySelector('a.result__a, a[href*="bettybossi"]');
+          var link = linkEl?.attributes['href'];
 
+          if (link == null) continue;
+
+          // DuckDuckGo wraps URLs, extract the actual URL
+          if (link.contains('uddg=')) {
+            final match = RegExp(r'uddg=([^&]+)').firstMatch(link);
+            if (match != null) {
+              link = Uri.decodeComponent(match.group(1)!);
+            }
+          }
+
+          // Only Betty Bossi recipe links
+          if (!link.contains('bettybossi.ch')) continue;
+          if (!link.toLowerCase().contains('recette') &&
+              !link.toLowerCase().contains('rezept')) continue;
+
+          // Get title
+          final title = linkEl?.text.trim() ??
+              result.querySelector('.result__title, h2, h3')?.text.trim();
+
+          if (title == null || title.isEmpty) continue;
+
+          results.add(RecipeSearchResult(
+            title: title.replaceAll(RegExp(r'\s+'), ' ').trim(),
+            url: link,
+            provider: RecipeProvider.bettyBossi,
+          ));
+        } catch (_) {
+          continue;
+        }
+      }
+    } catch (e) {
+      print('DuckDuckGo search error: $e');
+    }
+
+    return results;
+  }
+
+  /// Parse Betty Bossi page HTML for recipe cards
+  static List<RecipeSearchResult> _parseBettyBossiPage(String body, int maxResults) {
+    final results = <RecipeSearchResult>[];
+    final seenUrls = <String>{};
+    final document = html_parser.parse(body);
+
+    // Multiple selector strategies for different page layouts
+    final selectorStrategies = [
+      // Modern card-based layouts
+      'a[href*="/recettes/recette/"]',
+      'a[href*="/fr/recettes/recette/"]',
+      'a[href*="/Rezept/Show/"]',
+      'a[href*="/rezept/"]',
+      // Class-based selectors
+      '[class*="recipe-card"] a',
+      '[class*="RecipeCard"] a',
+      '[class*="recipe-tile"] a',
+      'article[class*="recipe"] a',
+      // Generic fallbacks
+      '.teaser a[href*="recette"]',
+      '.card a[href*="recette"]',
+    ];
+
+    for (final selector in selectorStrategies) {
+      if (results.length >= maxResults) break;
+
+      try {
+        final elements = document.querySelectorAll(selector);
+
+        for (final el in elements) {
+          if (results.length >= maxResults) break;
+
+          String? link = el.attributes['href'];
+          if (link == null || link.isEmpty) continue;
+
+          // Validate it's a recipe link
+          final lowerLink = link.toLowerCase();
+          if (!lowerLink.contains('recette') && !lowerLink.contains('rezept')) continue;
+          if (lowerLink.contains('?query=') || lowerLink.contains('/search')) continue;
+
+          // Make absolute URL
           final fullUrl = link.startsWith('http') ? link : 'https://www.bettybossi.ch$link';
           if (seenUrls.contains(fullUrl)) continue;
           seenUrls.add(fullUrl);
 
-          // Get title
-          var title = card.querySelector('h2, h3, h4, [class*="title"]')?.text.trim();
-          title ??= card.text.trim().split('\n').first;
-          if (title.isEmpty || title.length < 3 || title.length > 200) continue;
+          // Extract title
+          String? title;
 
-          // Get image
-          final imgEl = card.querySelector('img');
-          String? imageUrl = imgEl?.attributes['data-src'] ??
-              imgEl?.attributes['data-lazy-src'] ??
-              imgEl?.attributes['src'];
+          // Try various title sources
+          final parent = el.parent;
+          title ??= el.querySelector('h2, h3, h4, [class*="title"]')?.text.trim();
+          title ??= parent?.querySelector('h2, h3, h4, [class*="title"]')?.text.trim();
+          title ??= el.attributes['title']?.trim();
+          title ??= el.attributes['aria-label']?.trim();
+
+          // Extract from URL as last resort
+          if (title == null || title.isEmpty || title.length < 3) {
+            final urlTitle = fullUrl.split('/').last.replaceAll('-', ' ').replaceAll('_', ' ');
+            if (urlTitle.length >= 3) title = urlTitle;
+          }
+
+          if (title == null || title.isEmpty || title.length > 200) continue;
+          title = title.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+          // Extract image
+          String? imageUrl;
+          final imgEl = el.querySelector('img') ?? parent?.querySelector('img');
+          if (imgEl != null) {
+            imageUrl = imgEl.attributes['data-src'] ??
+                imgEl.attributes['data-lazy-src'] ??
+                imgEl.attributes['srcset']?.split(' ').first ??
+                imgEl.attributes['src'];
+
+            if (imageUrl != null && !imageUrl.startsWith('http')) {
+              imageUrl = 'https://www.bettybossi.ch$imageUrl';
+            }
+          }
 
           results.add(RecipeSearchResult(
             title: title,
@@ -329,16 +546,13 @@ class RecipeSearchService {
             imageUrl: imageUrl,
             provider: RecipeProvider.bettyBossi,
           ));
-        } catch (_) {
-          continue;
         }
+      } catch (_) {
+        continue;
       }
-
-      return results;
-    } catch (e) {
-      print('Betty Bossi search error: $e');
-      return [];
     }
+
+    return results;
   }
 
   /// Search Cuisine AZ
