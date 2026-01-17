@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../routing/app_router.dart';
+import '../../../dishes/domain/dish.dart';
 import '../../../family/data/family_repository.dart';
 import '../../data/recipe_repository.dart';
 import '../../domain/recipe.dart';
@@ -99,39 +100,80 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
   Widget _buildFilters(RecipeFilter filter) {
     final filterPicky = ref.watch(filterPickyEaterProvider);
     final pickyAvoid = ref.watch(pickyEaterAvoidProvider);
+    final recipes = ref.watch(familyRecipesProvider).value ?? [];
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FilterChip(
-            label: const Text('Rapide (< 20 min)'),
-            selected: filter.isQuick == true,
-            onSelected: (selected) {
-              ref.read(recipeFilterProvider.notifier).state =
-                  filter.copyWith(isQuick: selected ? true : null);
-            },
+          // General filters
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilterChip(
+                label: const Text('Rapide (< 20 min)'),
+                selected: filter.isQuick == true,
+                onSelected: (selected) {
+                  ref.read(recipeFilterProvider.notifier).state =
+                      filter.copyWith(isQuick: selected ? true : null);
+                },
+              ),
+              FilterChip(
+                label: const Text('Approuve enfants'),
+                selected: filter.isKidApproved == true,
+                onSelected: (selected) {
+                  ref.read(recipeFilterProvider.notifier).state =
+                      filter.copyWith(isKidApproved: selected ? true : null);
+                },
+              ),
+              if (pickyAvoid.isNotEmpty)
+                FilterChip(
+                  avatar: const Icon(Icons.child_care, size: 18),
+                  label: const Text('Mangeurs difficiles'),
+                  selected: filterPicky,
+                  selectedColor: AppColors.warning.withValues(alpha: 0.3),
+                  onSelected: (selected) {
+                    ref.read(filterPickyEaterProvider.notifier).state = selected;
+                  },
+                ),
+            ],
           ),
-          FilterChip(
-            label: const Text('Approuve enfants'),
-            selected: filter.isKidApproved == true,
-            onSelected: (selected) {
-              ref.read(recipeFilterProvider.notifier).state =
-                  filter.copyWith(isKidApproved: selected ? true : null);
-            },
-          ),
-          if (pickyAvoid.isNotEmpty)
-            FilterChip(
-              avatar: const Icon(Icons.child_care, size: 18),
-              label: const Text('Mangeurs difficiles'),
-              selected: filterPicky,
-              selectedColor: AppColors.warning.withValues(alpha: 0.3),
-              onSelected: (selected) {
-                ref.read(filterPickyEaterProvider.notifier).state = selected;
-              },
+          const SizedBox(height: 8),
+          // MealType filters
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                FilterChip(
+                  label: const Text('Tous'),
+                  selected: filter.mealType == null,
+                  onSelected: (_) {
+                    ref.read(recipeFilterProvider.notifier).state =
+                        filter.copyWith(clearMealType: true);
+                  },
+                ),
+                const SizedBox(width: 6),
+                ...MealType.values.map((type) {
+                  final count = recipes.where((r) => r.mealType == type).length;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: FilterChip(
+                      label: Text('${type.icon} ${type.label}${count > 0 ? ' ($count)' : ''}'),
+                      selected: filter.mealType == type,
+                      onSelected: (_) {
+                        ref.read(recipeFilterProvider.notifier).state = filter.copyWith(
+                          mealType: filter.mealType == type ? null : type,
+                          clearMealType: filter.mealType == type,
+                        );
+                      },
+                    ),
+                  );
+                }),
+              ],
             ),
+          ),
         ],
       ),
     );
@@ -255,8 +297,12 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                     ),
                     const SizedBox(height: 4),
                     // Tags
-                    Row(
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
                       children: [
+                        if (recipe.mealType != null)
+                          _buildTag('${recipe.mealType!.icon} ${recipe.mealType!.label}', AppColors.primary),
                         if (recipe.isQuick)
                           _buildTag('Rapide', AppColors.secondary),
                         if (recipe.isKidApproved)

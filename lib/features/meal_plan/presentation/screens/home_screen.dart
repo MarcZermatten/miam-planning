@@ -6,10 +6,11 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../routing/app_router.dart';
 import '../../../auth/data/auth_repository.dart';
 import '../../../family/data/family_repository.dart';
-import '../../../pantry/data/pantry_repository.dart';
 import '../../../recipes/data/recipe_repository.dart';
 import '../../data/meal_plan_repository.dart';
+import '../widgets/freezer_card.dart';
 import '../widgets/meal_stats_card.dart';
+import '../widgets/wines_alert_card.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -22,7 +23,6 @@ class HomeScreen extends ConsumerWidget {
     final mealPlanAsync = ref.watch(currentMealPlanProvider);
     final family = ref.watch(currentFamilyProvider).value;
     final enabledMeals = family?.settings.enabledMeals ?? ['lunch', 'dinner'];
-    final suggestions = ref.watch(suggestedRecipesProvider);
     final recipesAsync = ref.watch(familyRecipesProvider);
 
     // Get user's first name
@@ -150,44 +150,13 @@ class HomeScreen extends ConsumerWidget {
             const MealStatsCard(),
             const SizedBox(height: 24),
 
-            // Suggestions based on pantry
-            if (suggestions.isNotEmpty) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Suggestions du frigo',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => context.go(AppRoutes.pantry),
-                    child: const Text('Voir tout'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 140,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: suggestions.take(5).length,
-                  itemBuilder: (context, index) {
-                    final suggestion = suggestions[index];
-                    return _buildSuggestionCard(
-                      context,
-                      suggestion.recipe.title,
-                      '${(suggestion.matchPercent * 100).round()}% ingredients',
-                      suggestion.recipe.imageUrl,
-                      () => context.push('/recipes/${suggestion.recipe.id}'),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
+            // Freezer summary
+            const FreezerCard(),
+            const SizedBox(height: 24),
+
+            // Wines to consume soon
+            const WinesAlertCard(),
+            const SizedBox(height: 24),
 
             // Popular recipes
             recipesAsync.when(
@@ -304,74 +273,6 @@ class HomeScreen extends ConsumerWidget {
           color: hasRecipe ? null : AppColors.textHint,
         ),
         onTap: onTap,
-      ),
-    );
-  }
-
-  Widget _buildSuggestionCard(
-    BuildContext context,
-    String title,
-    String subtitle,
-    String? imageUrl,
-    VoidCallback onTap,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 140,
-        margin: const EdgeInsets.only(right: 12),
-        decoration: BoxDecoration(
-          color: context.colorSurface,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: context.isDarkMode ? 0.3 : 0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image
-            Container(
-              height: 80,
-              decoration: BoxDecoration(
-                color: context.colorSurfaceVariant,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                image: imageUrl != null
-                    ? DecorationImage(
-                        image: NetworkImage(imageUrl),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              child: imageUrl == null
-                  ? Center(child: Icon(Icons.restaurant, size: 32, color: context.colorTextHint))
-                  : null,
-            ),
-            // Text
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(fontSize: 11, color: AppColors.success),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

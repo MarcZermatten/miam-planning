@@ -7,6 +7,7 @@ class QuickDish {
   final String id;
   final String name;
   final List<DishCategory> categories;
+  final MealType? mealType;
   final DateTime createdAt;
   final int usageCount; // For sorting by frequency
 
@@ -14,12 +15,23 @@ class QuickDish {
     required this.id,
     required this.name,
     this.categories = const [],
+    this.mealType,
     required this.createdAt,
     this.usageCount = 0,
   });
 
   factory QuickDish.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    // Parse mealType
+    MealType? mealType;
+    if (data['mealType'] != null) {
+      mealType = MealType.values.firstWhere(
+        (e) => e.name == data['mealType'],
+        orElse: () => MealType.plat,
+      );
+    }
+
     return QuickDish(
       id: doc.id,
       name: data['name'] ?? '',
@@ -30,6 +42,7 @@ class QuickDish {
                   ))
               .toList() ??
           [],
+      mealType: mealType,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       usageCount: data['usageCount'] ?? 0,
     );
@@ -39,6 +52,7 @@ class QuickDish {
     return {
       'name': name,
       'categories': categories.map((c) => c.name).toList(),
+      'mealType': mealType?.name,
       'createdAt': Timestamp.fromDate(createdAt),
       'usageCount': usageCount,
     };
@@ -48,6 +62,7 @@ class QuickDish {
     String? id,
     String? name,
     List<DishCategory>? categories,
+    MealType? mealType,
     DateTime? createdAt,
     int? usageCount,
   }) {
@@ -55,6 +70,7 @@ class QuickDish {
       id: id ?? this.id,
       name: name ?? this.name,
       categories: categories ?? this.categories,
+      mealType: mealType ?? this.mealType,
       createdAt: createdAt ?? this.createdAt,
       usageCount: usageCount ?? this.usageCount,
     );

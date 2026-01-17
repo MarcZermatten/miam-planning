@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../family/data/family_repository.dart';
-import '../../../pantry/data/pantry_repository.dart';
 import '../../../recipes/data/recipe_repository.dart';
 import '../../../recipes/domain/recipe.dart';
 import '../../../dishes/data/dish_repository.dart';
@@ -520,9 +519,9 @@ class WeeklyPlannerScreen extends ConsumerWidget {
               Navigator.pop(context);
               _addMealFromQuickDish(ref, day, mealType, quickDish, currentAssignment);
             },
-            onCreateQuickDish: (name, categories) async {
+            onCreateQuickDish: (name, categories, mealTypeParam) async {
               Navigator.pop(context);
-              await _createAndAddQuickDish(ref, day, mealType, name, categories, currentAssignment);
+              await _createAndAddQuickDish(ref, day, mealType, name, categories, mealTypeParam, currentAssignment);
             },
           );
         },
@@ -661,6 +660,7 @@ class WeeklyPlannerScreen extends ConsumerWidget {
     String mealType,
     String name,
     List<DishCategory> categories,
+    MealType? dishMealType,
     MealAssignment? currentAssignment,
   ) async {
     final familyId = ref.read(currentFamilyIdProvider);
@@ -671,6 +671,7 @@ class WeeklyPlannerScreen extends ConsumerWidget {
           familyId: familyId,
           name: name,
           categories: categories,
+          mealType: dishMealType,
         );
 
     // Create new dish assignment
@@ -936,7 +937,7 @@ class _RecipeSelectorSheet extends ConsumerStatefulWidget {
   final Function(Recipe) onSelectRecipe;
   final Function(Dish) onSelectFrozen;
   final Function(QuickDish) onSelectQuickDish;
-  final Function(String name, List<DishCategory> categories) onCreateQuickDish;
+  final Function(String name, List<DishCategory> categories, MealType? mealType) onCreateQuickDish;
 
   const _RecipeSelectorSheet({
     required this.scrollController,
@@ -958,6 +959,10 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
   // Quick dish creation state
   final _quickDishNameController = TextEditingController();
   final Set<DishCategory> _selectedCategories = {};
+  MealType? _selectedMealType;
+
+  // Quick dish filter state
+  MealType? _quickDishMealTypeFilter;
 
   @override
   void initState() {
@@ -975,7 +980,6 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
   @override
   Widget build(BuildContext context) {
     final recipesAsync = ref.watch(familyRecipesProvider);
-    final pantryNames = ref.watch(availableIngredientNamesProvider);
     final frozenDishes = ref.watch(frozenDishesProvider);
     final quickDishes = ref.watch(familyQuickDishesProvider);
 
@@ -1066,7 +1070,7 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
             controller: _tabController,
             children: [
               // Tab 1: Recipes
-              _buildRecipesList(recipesAsync, pantryNames),
+              _buildRecipesList(recipesAsync),
               // Tab 2: Frozen dishes
               _buildFrozenList(frozenDishes),
               // Tab 3: Quick dishes
@@ -1078,7 +1082,7 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
     );
   }
 
-  Widget _buildRecipesList(AsyncValue<List<Recipe>> recipesAsync, Set<String> pantryNames) {
+  Widget _buildRecipesList(AsyncValue<List<Recipe>> recipesAsync) {
     return recipesAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Erreur: $e')),
@@ -1093,20 +1097,19 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
           return const Center(child: Text('Aucune recette trouvee'));
         }
 
-        final scored = filtered.map((recipe) {
-          final score = _calculateMatchScore(recipe, pantryNames);
-          return _ScoredRecipe(recipe: recipe, matchPercent: score);
-        }).toList();
-
-        scored.sort((a, b) => b.matchPercent.compareTo(a.matchPercent));
+        // Sort by rating then by title
+        filtered.sort((a, b) {
+          final ratingA = a.averageRating ?? 0;
+          final ratingB = b.averageRating ?? 0;
+          if (ratingA != ratingB) return ratingB.compareTo(ratingA);
+          return a.title.compareTo(b.title);
+        });
 
         return ListView.builder(
           controller: widget.scrollController,
-          itemCount: scored.length,
+          itemCount: filtered.length,
           itemBuilder: (context, index) {
-            final item = scored[index];
-            final recipe = item.recipe;
-            final matchPercent = item.matchPercent;
+            final recipe = filtered[index];
 
             return Builder(
               builder: (context) => ListTile(
@@ -1128,22 +1131,13 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                 subtitle: Row(
                   children: [
                     Text('${recipe.totalTime} min'),
-                    if (matchPercent > 0) ...[
+                    if (recipe.averageRating != null) ...[
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _getMatchColor(matchPercent).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${(matchPercent * 100).round()}%',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: _getMatchColor(matchPercent),
-                          ),
-                        ),
+                      const Icon(Icons.star, size: 14, color: AppColors.warning),
+                      const SizedBox(width: 2),
+                      Text(
+                        recipe.averageRating!.toStringAsFixed(1),
+                        style: const TextStyle(fontSize: 12),
                       ),
                     ],
                   ],
@@ -1151,11 +1145,6 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (matchPercent >= 1.0)
-                      const Tooltip(
-                        message: 'Tous les ingredients disponibles!',
-                        child: Icon(Icons.check_circle, color: AppColors.success, size: 20),
-                      ),
                     if (recipe.isKidApproved)
                       const Icon(Icons.child_care, color: AppColors.fruits, size: 20),
                   ],
@@ -1238,35 +1227,16 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
     );
   }
 
-  double _calculateMatchScore(Recipe recipe, Set<String> pantryNames) {
-    if (pantryNames.isEmpty) return 0;
-
-    final needed = recipe.ingredients
-        .where((i) => !i.isPantryStaple)
-        .map((i) => i.name.toLowerCase().trim())
-        .toList();
-
-    if (needed.isEmpty) return 1.0;
-
-    final matched = needed.where((name) {
-      return pantryNames.any((pantry) =>
-          pantry.contains(name) || name.contains(pantry));
-    }).length;
-
-    return matched / needed.length;
-  }
-
-  Color _getMatchColor(double percent) {
-    if (percent >= 0.8) return AppColors.success;
-    if (percent >= 0.5) return AppColors.warning;
-    return AppColors.info;
-  }
-
   Widget _buildQuickDishList(AsyncValue<List<QuickDish>> quickDishesAsync) {
     return quickDishesAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Erreur: $e')),
       data: (quickDishes) {
+        // Apply MealType filter
+        final filteredDishes = _quickDishMealTypeFilter == null
+            ? quickDishes
+            : quickDishes.where((d) => d.mealType == _quickDishMealTypeFilter).toList();
+
         return SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1325,7 +1295,7 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                         return FilterChip(
                           label: Text(
                             '${category.icon} ${category.label}',
-                            style: TextStyle(fontSize: 11),
+                            style: const TextStyle(fontSize: 11),
                           ),
                           selected: isSelected,
                           onSelected: (selected) {
@@ -1342,14 +1312,105 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                         );
                       }).toList(),
                     ),
+                    const SizedBox(height: 8),
+                    // MealType selector for creation
+                    Builder(
+                      builder: (context) => Row(
+                        children: [
+                          Text(
+                            'Type:',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.colorTextSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  ChoiceChip(
+                                    label: const Text('Aucun', style: TextStyle(fontSize: 10)),
+                                    selected: _selectedMealType == null,
+                                    onSelected: (_) => setState(() => _selectedMealType = null),
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ...MealType.values.map((type) {
+                                    final isSelected = _selectedMealType == type;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 4),
+                                      child: ChoiceChip(
+                                        label: Text(
+                                          '${type.icon} ${type.label}',
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
+                                        selected: isSelected,
+                                        onSelected: (_) => setState(() => _selectedMealType = type),
+                                        padding: EdgeInsets.zero,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
 
               const Divider(),
 
+              // MealType filter chips for existing dishes
+              if (quickDishes.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        FilterChip(
+                          label: const Text('Tous', style: TextStyle(fontSize: 11)),
+                          selected: _quickDishMealTypeFilter == null,
+                          onSelected: (_) => setState(() => _quickDishMealTypeFilter = null),
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        const SizedBox(width: 6),
+                        ...MealType.values.map((type) {
+                          final count = quickDishes.where((d) => d.mealType == type).length;
+                          if (count == 0) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: FilterChip(
+                              label: Text(
+                                '${type.icon} ${type.label} ($count)',
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              selected: _quickDishMealTypeFilter == type,
+                              onSelected: (_) => setState(() {
+                                _quickDishMealTypeFilter = _quickDishMealTypeFilter == type
+                                    ? null
+                                    : type;
+                              }),
+                              padding: EdgeInsets.zero,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+
               // Existing quick dishes
-              if (quickDishes.isEmpty)
+              if (filteredDishes.isEmpty)
                 Builder(
                   builder: (context) => Padding(
                     padding: const EdgeInsets.all(32),
@@ -1359,7 +1420,9 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                           Icon(Icons.flash_on, size: 48, color: context.colorTextHint),
                           const SizedBox(height: 16),
                           Text(
-                            'Aucun plat rapide',
+                            _quickDishMealTypeFilter != null
+                                ? 'Aucun plat ${_quickDishMealTypeFilter!.label.toLowerCase()}'
+                                : 'Aucun plat rapide',
                             style: TextStyle(color: context.colorTextSecondary),
                           ),
                           const SizedBox(height: 8),
@@ -1378,7 +1441,7 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                   builder: (context) => Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Text(
-                      'Plats recents (${quickDishes.length})',
+                      'Plats recents (${filteredDishes.length})',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
@@ -1387,7 +1450,7 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                     ),
                   ),
                 ),
-                ...quickDishes.map((quickDish) => ListTile(
+                ...filteredDishes.map((quickDish) => ListTile(
                       leading: Container(
                         width: 40,
                         height: 40,
@@ -1397,17 +1460,29 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
                         ),
                         child: Center(
                           child: Text(
-                            quickDish.categoriesDisplay.isNotEmpty
-                                ? quickDish.categoriesDisplay
-                                : '🍽️',
+                            quickDish.mealType?.icon ??
+                                (quickDish.categoriesDisplay.isNotEmpty
+                                    ? quickDish.categoriesDisplay
+                                    : '🍽️'),
                             style: const TextStyle(fontSize: 18),
                           ),
                         ),
                       ),
                       title: Text(quickDish.name),
-                      subtitle: Text(
-                        'Utilise ${quickDish.usageCount}x',
-                        style: const TextStyle(fontSize: 12),
+                      subtitle: Row(
+                        children: [
+                          if (quickDish.mealType != null) ...[
+                            Text(
+                              quickDish.mealType!.label,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            const Text(' • ', style: TextStyle(fontSize: 11)),
+                          ],
+                          Text(
+                            'Utilise ${quickDish.usageCount}x',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
                       ),
                       trailing: Builder(
                         builder: (context) => Container(
@@ -1439,17 +1514,11 @@ class _RecipeSelectorSheetState extends ConsumerState<_RecipeSelectorSheet>
     final name = _quickDishNameController.text.trim();
     if (name.isEmpty) return;
 
-    widget.onCreateQuickDish(name, _selectedCategories.toList());
+    widget.onCreateQuickDish(name, _selectedCategories.toList(), _selectedMealType);
     _quickDishNameController.clear();
     setState(() {
       _selectedCategories.clear();
+      _selectedMealType = null;
     });
   }
-}
-
-class _ScoredRecipe {
-  final Recipe recipe;
-  final double matchPercent;
-
-  _ScoredRecipe({required this.recipe, required this.matchPercent});
 }

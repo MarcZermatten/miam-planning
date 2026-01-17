@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../dishes/domain/dish.dart';
 
 /// Ingredient model
 class Ingredient {
@@ -104,6 +105,7 @@ class Recipe {
   final List<String> allergens;
   final List<int> kidCanHelpSteps;
   final List<RecipeRating> ratings;
+  final MealType? mealType;
   final DateTime createdAt;
   final String createdBy;
   final int timesCooked;
@@ -128,6 +130,7 @@ class Recipe {
     this.allergens = const [],
     this.kidCanHelpSteps = const [],
     this.ratings = const [],
+    this.mealType,
     required this.createdAt,
     required this.createdBy,
     this.timesCooked = 0,
@@ -139,6 +142,16 @@ class Recipe {
 
   factory Recipe.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    // Parse mealType
+    MealType? mealType;
+    if (data['mealType'] != null) {
+      mealType = MealType.values.firstWhere(
+        (e) => e.name == data['mealType'],
+        orElse: () => MealType.plat,
+      );
+    }
+
     return Recipe(
       id: doc.id,
       dishId: data['dishId'],
@@ -164,6 +177,7 @@ class Recipe {
               ?.map((e) => RecipeRating.fromMap(e as Map<String, dynamic>))
               .toList() ??
           [],
+      mealType: mealType,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       createdBy: data['createdBy'] ?? '',
       timesCooked: data['timesCooked'] ?? 0,
@@ -190,6 +204,7 @@ class Recipe {
       'allergens': allergens,
       'kidCanHelpSteps': kidCanHelpSteps,
       'ratings': ratings.map((e) => e.toMap()).toList(),
+      'mealType': mealType?.name,
       'createdAt': Timestamp.fromDate(createdAt),
       'createdBy': createdBy,
       'timesCooked': timesCooked,
@@ -244,6 +259,7 @@ class Recipe {
     List<String>? allergens,
     List<int>? kidCanHelpSteps,
     List<RecipeRating>? ratings,
+    MealType? mealType,
     int? timesCooked,
     DateTime? lastCookedAt,
   }) {
@@ -266,6 +282,7 @@ class Recipe {
       allergens: allergens ?? this.allergens,
       kidCanHelpSteps: kidCanHelpSteps ?? this.kidCanHelpSteps,
       ratings: ratings ?? this.ratings,
+      mealType: mealType ?? this.mealType,
       createdAt: createdAt,
       createdBy: createdBy,
       timesCooked: timesCooked ?? this.timesCooked,

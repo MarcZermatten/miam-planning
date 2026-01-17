@@ -57,6 +57,7 @@ class DishRepository {
     required String createdBy,
     String? imageUrl,
     List<DishCategory> categories = const [DishCategory.complete],
+    MealType? mealType,
     List<String> tags = const [],
     bool isFrozen = false,
     int frozenPortions = 0,
@@ -67,6 +68,7 @@ class DishRepository {
       name: name,
       imageUrl: imageUrl,
       categories: categories,
+      mealType: mealType,
       tags: tags,
       createdAt: DateTime.now(),
       createdBy: createdBy,
@@ -77,6 +79,15 @@ class DishRepository {
 
     await docRef.set(dish.toFirestore());
     return dish;
+  }
+
+  /// Watch dishes by meal type
+  Stream<List<Dish>> watchDishesByMealType(String familyId, MealType mealType) {
+    return _dishesCollection(familyId)
+        .where('mealType', isEqualTo: mealType.name)
+        .orderBy('name')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map(Dish.fromFirestore).toList());
   }
 
   /// Update a dish
@@ -188,4 +199,11 @@ final dishesByCategoryProvider = StreamProvider.family<List<Dish>, DishCategory>
   final familyId = ref.watch(currentFamilyIdProvider);
   if (familyId == null) return Stream.value([]);
   return ref.watch(dishRepositoryProvider).watchDishesByCategory(familyId, category);
+});
+
+/// Provider for dishes by meal type
+final dishesByMealTypeProvider = StreamProvider.family<List<Dish>, MealType>((ref, mealType) {
+  final familyId = ref.watch(currentFamilyIdProvider);
+  if (familyId == null) return Stream.value([]);
+  return ref.watch(dishRepositoryProvider).watchDishesByMealType(familyId, mealType);
 });

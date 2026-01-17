@@ -22,6 +22,7 @@ class PantryScreen extends ConsumerStatefulWidget {
 class _PantryScreenState extends ConsumerState<PantryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  MealType? _freezerMealTypeFilter;
 
   @override
   void initState() {
@@ -364,22 +365,70 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
   }
 
   Widget _buildFreezerList(List<Dish> dishes) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: dishes.length + 1, // +1 for add button
-      itemBuilder: (context, index) {
-        if (index == dishes.length) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: OutlinedButton.icon(
-              onPressed: _showAddFreezerDialog,
-              icon: const Icon(Icons.add),
-              label: const Text('Ajouter un plat'),
+    // Filter by MealType if selected
+    final filteredDishes = _freezerMealTypeFilter == null
+        ? dishes
+        : dishes.where((d) => d.mealType == _freezerMealTypeFilter).toList();
+
+    return Column(
+      children: [
+        // MealType filter chips
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                FilterChip(
+                  label: const Text('Tous'),
+                  selected: _freezerMealTypeFilter == null,
+                  onSelected: (_) => setState(() => _freezerMealTypeFilter = null),
+                ),
+                const SizedBox(width: 8),
+                ...MealType.values.map((type) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text('${type.icon} ${type.label}'),
+                    selected: _freezerMealTypeFilter == type,
+                    onSelected: (_) => setState(() {
+                      _freezerMealTypeFilter = _freezerMealTypeFilter == type ? null : type;
+                    }),
+                  ),
+                )),
+              ],
             ),
-          );
-        }
-        return _buildFreezerDishCard(dishes[index]);
-      },
+          ),
+        ),
+        // Dish list
+        Expanded(
+          child: filteredDishes.isEmpty
+              ? Center(
+                  child: Text(
+                    _freezerMealTypeFilter != null
+                        ? 'Aucun plat "${_freezerMealTypeFilter!.label}" congele'
+                        : 'Aucun plat congele',
+                    style: TextStyle(color: context.colorTextHint),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredDishes.length + 1, // +1 for add button
+                  itemBuilder: (context, index) {
+                    if (index == filteredDishes.length) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: OutlinedButton.icon(
+                          onPressed: _showAddFreezerDialog,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Ajouter un plat'),
+                        ),
+                      );
+                    }
+                    return _buildFreezerDishCard(filteredDishes[index]);
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -432,12 +481,28 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                           fontSize: 16,
                         ),
                       ),
-                      Text(
-                        dish.categoriesDisplay,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: context.colorTextSecondary,
-                        ),
+                      Row(
+                        children: [
+                          if (dish.mealType != null) ...[
+                            Text(
+                              dish.mealType!.icon,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Flexible(
+                            child: Text(
+                              dish.mealType != null
+                                  ? '${dish.mealType!.label} - ${dish.categoriesDisplay}'
+                                  : dish.categoriesDisplay,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.colorTextSecondary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -521,7 +586,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
         builder: (context, scrollController) {
           return _AddFreezerSheet(
             scrollController: scrollController,
-            onAddManual: (name, categories, portions) async {
+            onAddManual: (name, categories, mealType, portions) async {
               Navigator.pop(context);
               final familyId = ref.read(currentFamilyIdProvider);
               if (familyId == null) return;
@@ -533,6 +598,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                     name: name,
                     createdBy: userId,
                     categories: categories.isNotEmpty ? categories : [DishCategory.complete],
+                    mealType: mealType,
                     isFrozen: true,
                     frozenPortions: portions,
                   );
@@ -649,6 +715,14 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
           return (b.year ?? 0).compareTo(a.year ?? 0);
         case 'type':
           return a.type.index.compareTo(b.type.index);
+        case 'consumeBefore':
+          // Wines with consumeBefore first, sorted by date (soonest first)
+          if (a.consumeBefore == null && b.consumeBefore == null) return 0;
+          if (a.consumeBefore == null) return 1;
+          if (b.consumeBefore == null) return -1;
+          return a.consumeBefore!.compareTo(b.consumeBefore!);
+        case 'rating':
+          return (b.rating ?? 0).compareTo(a.rating ?? 0);
         default:
           return b.addedAt.compareTo(a.addedAt);
       }
@@ -743,7 +817,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                           children: [
                             Icon(_sortBy == 'year' ? Icons.check : null, size: 18),
                             const SizedBox(width: 8),
-                            const Text('Année'),
+                            const Text('Annee'),
                           ],
                         ),
                       ),
@@ -754,6 +828,26 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
                             Icon(_sortBy == 'type' ? Icons.check : null, size: 18),
                             const SizedBox(width: 8),
                             const Text('Type'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'consumeBefore',
+                        child: Row(
+                          children: [
+                            Icon(_sortBy == 'consumeBefore' ? Icons.check : null, size: 18),
+                            const SizedBox(width: 8),
+                            const Text('A consommer'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'rating',
+                        child: Row(
+                          children: [
+                            Icon(_sortBy == 'rating' ? Icons.check : null, size: 18),
+                            const SizedBox(width: 8),
+                            const Text('Note'),
                           ],
                         ),
                       ),
@@ -844,65 +938,128 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
       },
       child: Card(
         margin: const EdgeInsets.only(bottom: 8),
-        child: ListTile(
-          leading: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: typeColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.wine_bar, color: typeColor),
-          ),
-          title: Text(
-            wine.name,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          subtitle: Text(
-            [
-              wine.typeLabel,
-              if (wine.grape != null) wine.grape,
-              if (wine.year != null) wine.year.toString(),
-            ].join(' • '),
-            style: TextStyle(color: context.colorTextSecondary, fontSize: 13),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IconButton(
-                icon: const Icon(Icons.remove_circle_outline),
-                onPressed: () {
-                  ref.read(wineRepositoryProvider).updateQuantity(
-                    familyId,
-                    wine.id,
-                    wine.quantity - 1,
-                  );
-                },
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: typeColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${wine.quantity}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: typeColor,
+              Row(
+                children: [
+                  // Wine icon
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: typeColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.wine_bar, color: typeColor),
                   ),
+                  const SizedBox(width: 12),
+                  // Name and details
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          wine.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          [
+                            wine.typeLabel,
+                            if (wine.grape != null) wine.grape,
+                            if (wine.year != null) wine.year.toString(),
+                          ].join(' - '),
+                          style: TextStyle(color: context.colorTextSecondary, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Quantity controls
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, size: 20),
+                    onPressed: () {
+                      ref.read(wineRepositoryProvider).updateQuantity(
+                        familyId,
+                        wine.id,
+                        wine.quantity - 1,
+                      );
+                    },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: typeColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${wine.quantity}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: typeColor,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, size: 20),
+                    onPressed: () {
+                      ref.read(wineRepositoryProvider).updateQuantity(
+                        familyId,
+                        wine.id,
+                        wine.quantity + 1,
+                      );
+                    },
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              // Rating and consume before row
+              if (wine.rating != null || wine.consumeBefore != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    // Rating stars
+                    if (wine.rating != null) ...[
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(5, (index) {
+                          return Icon(
+                            index < wine.rating! ? Icons.star : Icons.star_border,
+                            size: 16,
+                            color: index < wine.rating! ? AppColors.warning : context.colorTextHint,
+                          );
+                        }),
+                      ),
+                      const SizedBox(width: 16),
+                    ],
+                    // Consume before date
+                    if (wine.consumeBefore != null) ...[
+                      Icon(
+                        wine.isExpired ? Icons.error_outline :
+                        wine.shouldConsumeSoon ? Icons.schedule : Icons.event,
+                        size: 14,
+                        color: wine.isExpired ? AppColors.error :
+                               wine.shouldConsumeSoon ? AppColors.warning : context.colorTextHint,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Avant le ${wine.consumeBefore!.day}/${wine.consumeBefore!.month}/${wine.consumeBefore!.year}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: wine.isExpired ? AppColors.error :
+                                 wine.shouldConsumeSoon ? AppColors.warning : context.colorTextHint,
+                          fontWeight: wine.shouldConsumeSoon || wine.isExpired ? FontWeight.w500 : null,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.add_circle_outline),
-                onPressed: () {
-                  ref.read(wineRepositoryProvider).updateQuantity(
-                    familyId,
-                    wine.id,
-                    wine.quantity + 1,
-                  );
-                },
-              ),
+              ],
             ],
           ),
         ),
@@ -916,6 +1073,8 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
     final yearController = TextEditingController();
     WineType selectedType = WineType.red;
     int quantity = 1;
+    DateTime? consumeBefore;
+    int? rating;
 
     showModalBottomSheet(
       context: context,
@@ -928,129 +1087,197 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
             right: 16,
             top: 16,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Ajouter une bouteille',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nom du vin *',
-                  border: OutlineInputBorder(),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Ajouter une bouteille',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-                textCapitalization: TextCapitalization.sentences,
-                autofocus: true,
-              ),
-              const SizedBox(height: 12),
-              // Wine type selector
-              SegmentedButton<WineType>(
-                segments: const [
-                  ButtonSegment(
-                    value: WineType.red,
-                    label: Text('Rouge'),
-                    icon: Icon(Icons.wine_bar),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nom du vin *',
+                    border: OutlineInputBorder(),
                   ),
-                  ButtonSegment(
-                    value: WineType.white,
-                    label: Text('Blanc'),
-                    icon: Icon(Icons.wine_bar),
-                  ),
-                  ButtonSegment(
-                    value: WineType.rose,
-                    label: Text('Rosé'),
-                    icon: Icon(Icons.wine_bar),
-                  ),
-                ],
-                selected: {selectedType},
-                onSelectionChanged: (types) {
-                  setSheetState(() => selectedType = types.first);
-                },
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: grapeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Cépage',
-                        border: OutlineInputBorder(),
+                  textCapitalization: TextCapitalization.sentences,
+                  autofocus: true,
+                ),
+                const SizedBox(height: 12),
+                // Wine type selector
+                SegmentedButton<WineType>(
+                  segments: const [
+                    ButtonSegment(
+                      value: WineType.red,
+                      label: Text('Rouge'),
+                      icon: Icon(Icons.wine_bar),
+                    ),
+                    ButtonSegment(
+                      value: WineType.white,
+                      label: Text('Blanc'),
+                      icon: Icon(Icons.wine_bar),
+                    ),
+                    ButtonSegment(
+                      value: WineType.rose,
+                      label: Text('Rose'),
+                      icon: Icon(Icons.wine_bar),
+                    ),
+                  ],
+                  selected: {selectedType},
+                  onSelectionChanged: (types) {
+                    setSheetState(() => selectedType = types.first);
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: grapeController,
+                        decoration: const InputDecoration(
+                          labelText: 'Cepage',
+                          border: OutlineInputBorder(),
+                        ),
+                        textCapitalization: TextCapitalization.sentences,
                       ),
-                      textCapitalization: TextCapitalization.sentences,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 100,
-                    child: TextField(
-                      controller: yearController,
-                      decoration: const InputDecoration(
-                        labelText: 'Année',
-                        border: OutlineInputBorder(),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 100,
+                      child: TextField(
+                        controller: yearController,
+                        decoration: const InputDecoration(
+                          labelText: 'Annee',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
                       ),
-                      keyboardType: TextInputType.number,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Quantity selector
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('Quantité: '),
-                  IconButton(
-                    icon: const Icon(Icons.remove_circle_outline),
-                    onPressed: quantity > 1
-                        ? () => setSheetState(() => quantity--)
-                        : null,
-                  ),
-                  Text(
-                    '$quantity',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline),
-                    onPressed: () => setSheetState(() => quantity++),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () async {
-                  if (nameController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Le nom est requis')),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Consume before date picker
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: consumeBefore ?? DateTime.now().add(const Duration(days: 365)),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365 * 30)),
+                      helpText: 'A consommer avant',
                     );
-                    return;
-                  }
-                  final familyId = ref.read(currentFamilyIdProvider);
-                  if (familyId == null) return;
+                    if (picked != null) {
+                      setSheetState(() => consumeBefore = picked);
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'A consommer avant',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: consumeBefore != null
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => setSheetState(() => consumeBefore = null),
+                            )
+                          : const Icon(Icons.calendar_today),
+                    ),
+                    child: Text(
+                      consumeBefore != null
+                          ? '${consumeBefore!.day}/${consumeBefore!.month}/${consumeBefore!.year}'
+                          : 'Optionnel',
+                      style: TextStyle(
+                        color: consumeBefore != null ? null : context.colorTextHint,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Rating selector
+                Row(
+                  children: [
+                    const Text('Note: '),
+                    const SizedBox(width: 8),
+                    ...List.generate(5, (index) {
+                      final starIndex = index + 1;
+                      return IconButton(
+                        icon: Icon(
+                          rating != null && starIndex <= rating! ? Icons.star : Icons.star_border,
+                          color: rating != null && starIndex <= rating! ? AppColors.warning : null,
+                        ),
+                        onPressed: () {
+                          setSheetState(() {
+                            rating = rating == starIndex ? null : starIndex;
+                          });
+                        },
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      );
+                    }),
+                    if (rating != null) ...[
+                      const SizedBox(width: 8),
+                      Text('$rating/5', style: const TextStyle(fontWeight: FontWeight.w500)),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Quantity selector
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Quantite: '),
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: quantity > 1
+                          ? () => setSheetState(() => quantity--)
+                          : null,
+                    ),
+                    Text(
+                      '$quantity',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: () => setSheetState(() => quantity++),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (nameController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Le nom est requis')),
+                      );
+                      return;
+                    }
+                    final familyId = ref.read(currentFamilyIdProvider);
+                    if (familyId == null) return;
 
-                  await ref.read(wineRepositoryProvider).addWineBottle(
-                    familyId: familyId,
-                    name: nameController.text.trim(),
-                    type: selectedType,
-                    grape: grapeController.text.trim().isEmpty
-                        ? null
-                        : grapeController.text.trim(),
-                    year: int.tryParse(yearController.text),
-                    quantity: quantity,
-                  );
-                  if (context.mounted) Navigator.pop(context);
-                },
-                child: const Text('Ajouter'),
-              ),
-              const SizedBox(height: 16),
-            ],
+                    await ref.read(wineRepositoryProvider).addWineBottle(
+                      familyId: familyId,
+                      name: nameController.text.trim(),
+                      type: selectedType,
+                      grape: grapeController.text.trim().isEmpty
+                          ? null
+                          : grapeController.text.trim(),
+                      year: int.tryParse(yearController.text),
+                      quantity: quantity,
+                      consumeBefore: consumeBefore,
+                      rating: rating,
+                    );
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  child: const Text('Ajouter'),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
@@ -1339,7 +1566,7 @@ class _PantryScreenState extends ConsumerState<PantryScreen>
 /// Supports manual entry or selection from existing recipes
 class _AddFreezerSheet extends ConsumerStatefulWidget {
   final ScrollController scrollController;
-  final Future<void> Function(String name, List<DishCategory> categories, int portions) onAddManual;
+  final Future<void> Function(String name, List<DishCategory> categories, MealType? mealType, int portions) onAddManual;
   final Future<void> Function(Recipe recipe, int portions) onAddFromRecipe;
 
   const _AddFreezerSheet({
@@ -1360,6 +1587,7 @@ class _AddFreezerSheetState extends ConsumerState<_AddFreezerSheet> {
   // Manual mode state
   final _nameController = TextEditingController();
   final Set<DishCategory> _selectedCategories = {DishCategory.complete};
+  MealType? _selectedMealType;
   int _manualPortions = 1;
 
   // Recipe mode state
@@ -1535,6 +1763,35 @@ class _AddFreezerSheetState extends ConsumerState<_AddFreezerSheet> {
               selectedColor: AppColors.primary.withValues(alpha: 0.2),
             );
           }).toList(),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Meal type selector
+        const Text(
+          'Type de repas',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilterChip(
+              label: const Text('Non defini'),
+              selected: _selectedMealType == null,
+              onSelected: (_) => setState(() => _selectedMealType = null),
+            ),
+            ...MealType.values.map((type) => FilterChip(
+              label: Text('${type.icon} ${type.label}'),
+              selected: _selectedMealType == type,
+              onSelected: (_) => setState(() => _selectedMealType = type),
+              selectedColor: AppColors.primary.withValues(alpha: 0.2),
+            )),
+          ],
         ),
 
         const SizedBox(height: 20),
@@ -1779,7 +2036,7 @@ class _AddFreezerSheetState extends ConsumerState<_AddFreezerSheet> {
     if (_mode == _FreezerAddMode.manual) {
       final name = _nameController.text.trim();
       if (name.isNotEmpty) {
-        widget.onAddManual(name, _selectedCategories.toList(), _manualPortions);
+        widget.onAddManual(name, _selectedCategories.toList(), _selectedMealType, _manualPortions);
       }
     } else {
       if (_selectedRecipe != null) {

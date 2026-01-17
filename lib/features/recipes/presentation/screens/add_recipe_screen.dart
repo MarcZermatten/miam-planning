@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/data/auth_repository.dart';
+import '../../../dishes/domain/dish.dart';
 import '../../../family/data/family_repository.dart';
 import '../../data/recipe_repository.dart';
 import '../../data/recipe_scraper.dart';
@@ -33,6 +34,7 @@ class _AddRecipeScreenState extends ConsumerState<AddRecipeScreen>
   final _instructionsController = TextEditingController();
 
   int _difficulty = 2;
+  MealType? _selectedMealType;
   List<Ingredient> _ingredients = [];
   List<String> _selectedAllergens = [];
   List<int> _kidCanHelpSteps = [];
@@ -113,6 +115,7 @@ class _AddRecipeScreenState extends ConsumerState<AddRecipeScreen>
             instructions: instructions,
             allergens: _selectedAllergens,
             kidCanHelpSteps: _kidCanHelpSteps,
+            mealType: _selectedMealType,
             sourceUrl: _sourceUrl,
             imageUrl: _imageUrl,
           );
@@ -592,6 +595,35 @@ class _AddRecipeScreenState extends ConsumerState<AddRecipeScreen>
               onSelectionChanged: (selected) {
                 setState(() => _difficulty = selected.first);
               },
+            ),
+            const SizedBox(height: 24),
+
+            // MealType
+            const Text(
+              'Type de plat',
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ChoiceChip(
+                    label: const Text('Non defini'),
+                    selected: _selectedMealType == null,
+                    onSelected: (_) => setState(() => _selectedMealType = null),
+                  ),
+                  const SizedBox(width: 8),
+                  ...MealType.values.map((type) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text('${type.icon} ${type.label}'),
+                          selected: _selectedMealType == type,
+                          onSelected: (_) => setState(() => _selectedMealType = type),
+                        ),
+                      )),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 

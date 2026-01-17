@@ -86,6 +86,53 @@ extension DishCategoryExtension on DishCategory {
   }
 }
 
+/// Type of meal (when in the day this dish is typically served)
+enum MealType {
+  entree,         // Entree
+  plat,           // Plat principal
+  dessert,        // Dessert
+  gouter,         // Gouter
+  petitDejeuner,  // Petit-dejeuner
+  apero,          // Aperitif
+}
+
+/// Extension for MealType labels
+extension MealTypeExtension on MealType {
+  String get label {
+    switch (this) {
+      case MealType.entree:
+        return 'Entree';
+      case MealType.plat:
+        return 'Plat';
+      case MealType.dessert:
+        return 'Dessert';
+      case MealType.gouter:
+        return 'Gouter';
+      case MealType.petitDejeuner:
+        return 'Petit-dej';
+      case MealType.apero:
+        return 'Apero';
+    }
+  }
+
+  String get icon {
+    switch (this) {
+      case MealType.entree:
+        return '🥗';
+      case MealType.plat:
+        return '🍽️';
+      case MealType.dessert:
+        return '🍰';
+      case MealType.gouter:
+        return '🍪';
+      case MealType.petitDejeuner:
+        return '🥐';
+      case MealType.apero:
+        return '🥂';
+    }
+  }
+}
+
 /// A dish represents a meal item (e.g., "Puree de pommes de terre")
 /// Each dish can have multiple recipe variants and multiple nutritional categories
 class Dish {
@@ -93,6 +140,7 @@ class Dish {
   final String name;
   final String? imageUrl;
   final List<DishCategory> categories; // Multiple categories allowed
+  final MealType? mealType; // Type of meal (entree, plat, dessert, etc.)
   final List<String> recipeIds;
   final List<String> tags;
   final DateTime createdAt;
@@ -108,6 +156,7 @@ class Dish {
     required this.name,
     this.imageUrl,
     this.categories = const [DishCategory.complete],
+    this.mealType,
     this.recipeIds = const [],
     this.tags = const [],
     required this.createdAt,
@@ -141,11 +190,21 @@ class Dish {
       categories = [DishCategory.complete];
     }
 
+    // Parse mealType
+    MealType? mealType;
+    if (data['mealType'] != null) {
+      mealType = MealType.values.firstWhere(
+        (e) => e.name == data['mealType'],
+        orElse: () => MealType.plat,
+      );
+    }
+
     return Dish(
       id: doc.id,
       name: data['name'] ?? '',
       imageUrl: data['imageUrl'],
       categories: categories,
+      mealType: mealType,
       recipeIds: List<String>.from(data['recipeIds'] ?? []),
       tags: List<String>.from(data['tags'] ?? []),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -161,6 +220,7 @@ class Dish {
       'name': name,
       'imageUrl': imageUrl,
       'categories': categories.map((c) => c.name).toList(),
+      'mealType': mealType?.name,
       'recipeIds': recipeIds,
       'tags': tags,
       'createdAt': Timestamp.fromDate(createdAt),
@@ -175,6 +235,7 @@ class Dish {
     String? name,
     String? imageUrl,
     List<DishCategory>? categories,
+    MealType? mealType,
     List<String>? recipeIds,
     List<String>? tags,
     bool? isFrozen,
@@ -186,6 +247,7 @@ class Dish {
       name: name ?? this.name,
       imageUrl: imageUrl ?? this.imageUrl,
       categories: categories ?? this.categories,
+      mealType: mealType ?? this.mealType,
       recipeIds: recipeIds ?? this.recipeIds,
       tags: tags ?? this.tags,
       createdAt: createdAt,

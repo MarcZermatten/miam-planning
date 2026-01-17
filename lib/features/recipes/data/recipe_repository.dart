@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../dishes/domain/dish.dart';
 import '../../family/data/family_repository.dart';
 import '../domain/recipe.dart';
 
@@ -32,6 +33,7 @@ class RecipeFilter {
   final bool? isQuick;
   final bool? isKidApproved;
   final List<String> excludeAllergens;
+  final MealType? mealType;
 
   const RecipeFilter({
     this.searchQuery,
@@ -39,6 +41,7 @@ class RecipeFilter {
     this.isQuick,
     this.isKidApproved,
     this.excludeAllergens = const [],
+    this.mealType,
   });
 
   RecipeFilter copyWith({
@@ -47,6 +50,8 @@ class RecipeFilter {
     bool? isQuick,
     bool? isKidApproved,
     List<String>? excludeAllergens,
+    MealType? mealType,
+    bool clearMealType = false,
   }) {
     return RecipeFilter(
       searchQuery: searchQuery ?? this.searchQuery,
@@ -54,6 +59,7 @@ class RecipeFilter {
       isQuick: isQuick ?? this.isQuick,
       isKidApproved: isKidApproved ?? this.isKidApproved,
       excludeAllergens: excludeAllergens ?? this.excludeAllergens,
+      mealType: clearMealType ? null : (mealType ?? this.mealType),
     );
   }
 }
@@ -99,6 +105,11 @@ final filteredRecipesProvider = Provider<List<Recipe>>((ref) {
         filtered = filtered.where((r) => r.isKidApproved).toList();
       }
 
+      // MealType filter
+      if (filter.mealType != null) {
+        filtered = filtered.where((r) => r.mealType == filter.mealType).toList();
+      }
+
       // Exclude allergens (manual filter)
       if (filter.excludeAllergens.isNotEmpty) {
         filtered = filtered.where((r) {
@@ -122,69 +133,6 @@ final filteredRecipesProvider = Provider<List<Recipe>>((ref) {
       }
 
       return filtered;
-    },
-    loading: () => [],
-    error: (_, __) => [],
-  );
-});
-
-/// Leftover suggestions - recipes using ingredients from recently cooked meals
-final leftoverSuggestionsProvider = Provider<List<Recipe>>((ref) {
-  final recipesAsync = ref.watch(familyRecipesProvider);
-
-  return recipesAsync.when(
-    data: (recipes) {
-      // Find recently cooked recipes (last 3 days)
-      final now = DateTime.now();
-      final threeDaysAgo = now.subtract(const Duration(days: 3));
-
-      final recentlyCooked = recipes
-          .where((r) => r.lastCookedAt != null && r.lastCookedAt!.isAfter(threeDaysAgo))
-          .toList();
-
-      if (recentlyCooked.isEmpty) return [];
-
-      // Extract main ingredients from recently cooked recipes
-      final recentIngredients = <String>{};
-      for (final recipe in recentlyCooked) {
-        for (final ing in recipe.ingredients) {
-          if (!ing.isPantryStaple) {
-            recentIngredients.add(ing.name.toLowerCase());
-          }
-        }
-      }
-
-      if (recentIngredients.isEmpty) return [];
-
-      // Find recipes that use some of these ingredients (but weren't just cooked)
-      final recentIds = recentlyCooked.map((r) => r.id).toSet();
-      final suggestions = recipes
-          .where((r) => !recentIds.contains(r.id))
-          .where((r) {
-            final recipeIngredients = r.ingredients
-                .where((i) => !i.isPantryStaple)
-                .map((i) => i.name.toLowerCase())
-                .toSet();
-            // At least 1 ingredient in common
-            return recipeIngredients.any((i) =>
-                recentIngredients.any((recent) => i.contains(recent) || recent.contains(i)));
-          })
-          .toList();
-
-      // Sort by match count
-      suggestions.sort((a, b) {
-        int matchA = a.ingredients
-            .where((i) => recentIngredients.any((r) =>
-                i.name.toLowerCase().contains(r) || r.contains(i.name.toLowerCase())))
-            .length;
-        int matchB = b.ingredients
-            .where((i) => recentIngredients.any((r) =>
-                i.name.toLowerCase().contains(r) || r.contains(i.name.toLowerCase())))
-            .length;
-        return matchB.compareTo(matchA);
-      });
-
-      return suggestions.take(5).toList();
     },
     loading: () => [],
     error: (_, __) => [],
@@ -218,6 +166,7 @@ class RecipeRepository {
     List<String> tags = const [],
     List<String> allergens = const [],
     List<int> kidCanHelpSteps = const [],
+    MealType? mealType,
   }) async {
     final docRef = _recipesRef(familyId).doc();
     final recipe = Recipe(
@@ -236,6 +185,7 @@ class RecipeRepository {
       tags: tags,
       allergens: allergens,
       kidCanHelpSteps: kidCanHelpSteps,
+      mealType: mealType,
       createdAt: DateTime.now(),
       createdBy: createdBy,
     );
@@ -306,28 +256,5 @@ class RecipeRepository {
       'timesCooked': FieldValue.increment(1),
       'lastCookedAt': Timestamp.now(),
     });
-  }
-
-  /// Search recipes by ingredients
-  Future<List<Recipe>> searchByIngredients({
-    required String familyId,
-    required List<String> availableIngredients,
-    bool ignorePantryStaples = true,
-  }) async {
-    final snapshot = await _recipesRef(familyId).get();
-    final recipes = snapshot.docs.map((doc) => Recipe.fromFirestore(doc)).toList();
-
-    final available = availableIngredients.map((i) => i.toLowerCase()).toSet();
-
-    return recipes.where((recipe) {
-      final needed = recipe.ingredients
-          .where((i) => !ignorePantryStaples || !i.isPantryStaple)
-          .map((i) => i.name.toLowerCase())
-          .toSet();
-
-      // Check if we have at least 70% of ingredients
-      final matched = needed.where((i) => available.contains(i)).length;
-      return matched >= needed.length * 0.7;
-    }).toList();
   }
 }

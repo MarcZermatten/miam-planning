@@ -1,8 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../family/data/family_repository.dart';
-import '../../recipes/data/recipe_repository.dart';
-import '../../recipes/domain/recipe.dart';
 import '../domain/pantry_item.dart';
 
 /// Pantry repository provider
@@ -26,86 +24,6 @@ final pantryStaplesProvider = Provider<List<PantryItem>>((ref) {
     error: (_, __) => [],
   );
 });
-
-/// Noms des ingredients disponibles (pour comparaison)
-final availableIngredientNamesProvider = Provider<Set<String>>((ref) {
-  final items = ref.watch(pantryItemsProvider);
-  return items.when(
-    data: (list) => list.map((i) => i.normalizedName).toSet(),
-    loading: () => {},
-    error: (_, __) => {},
-  );
-});
-
-/// Recettes realisables avec les ingredients disponibles
-final suggestedRecipesProvider = Provider<List<RecipeSuggestion>>((ref) {
-  final recipesAsync = ref.watch(familyRecipesProvider);
-  final availableNames = ref.watch(availableIngredientNamesProvider);
-
-  if (availableNames.isEmpty) return [];
-
-  return recipesAsync.when(
-    data: (recipes) {
-      final suggestions = <RecipeSuggestion>[];
-
-      for (final recipe in recipes) {
-        final needed = recipe.ingredients
-            .where((i) => !i.isPantryStaple)
-            .map((i) => i.name.toLowerCase().trim())
-            .toList();
-
-        if (needed.isEmpty) continue;
-
-        final matched = needed.where((name) {
-          return availableNames.any((available) =>
-              available.contains(name) || name.contains(available));
-        }).length;
-
-        final matchPercent = matched / needed.length;
-
-        // Au moins 50% des ingredients disponibles
-        if (matchPercent >= 0.5) {
-          suggestions.add(RecipeSuggestion(
-            recipe: recipe,
-            matchedIngredients: matched,
-            totalIngredients: needed.length,
-            matchPercent: matchPercent,
-            missingIngredients: needed
-                .where((name) => !availableNames.any((available) =>
-                    available.contains(name) || name.contains(available)))
-                .toList(),
-          ));
-        }
-      }
-
-      // Trier par pourcentage de match decroissant
-      suggestions.sort((a, b) => b.matchPercent.compareTo(a.matchPercent));
-
-      return suggestions;
-    },
-    loading: () => [],
-    error: (_, __) => [],
-  );
-});
-
-/// Suggestion de recette avec score de correspondance
-class RecipeSuggestion {
-  final Recipe recipe;
-  final int matchedIngredients;
-  final int totalIngredients;
-  final double matchPercent;
-  final List<String> missingIngredients;
-
-  const RecipeSuggestion({
-    required this.recipe,
-    required this.matchedIngredients,
-    required this.totalIngredients,
-    required this.matchPercent,
-    required this.missingIngredients,
-  });
-
-  String get matchLabel => '${(matchPercent * 100).round()}%';
-}
 
 /// Pantry repository for Firestore operations
 class PantryRepository {

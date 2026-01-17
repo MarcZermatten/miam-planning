@@ -42,12 +42,14 @@ class QuickDishRepository {
     required String familyId,
     required String name,
     List<DishCategory> categories = const [],
+    MealType? mealType,
   }) async {
     final docRef = _quickDishesRef(familyId).doc();
     final quickDish = QuickDish(
       id: docRef.id,
       name: name,
       categories: categories,
+      mealType: mealType,
       createdAt: DateTime.now(),
       usageCount: 1, // Start with 1 since we're using it
     );

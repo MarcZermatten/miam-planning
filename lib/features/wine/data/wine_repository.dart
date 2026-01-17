@@ -37,6 +37,8 @@ class WineRepository {
     String? grape,
     int? year,
     int quantity = 1,
+    DateTime? consumeBefore,
+    int? rating,
   }) async {
     await _wineCollection(familyId).add({
       'name': name,
@@ -45,6 +47,8 @@ class WineRepository {
       'year': year,
       'quantity': quantity,
       'addedAt': FieldValue.serverTimestamp(),
+      'consumeBefore': consumeBefore != null ? Timestamp.fromDate(consumeBefore) : null,
+      'rating': rating,
     });
   }
 
@@ -68,6 +72,8 @@ class WineRepository {
     String? grape,
     int? year,
     required int quantity,
+    DateTime? consumeBefore,
+    int? rating,
   }) async {
     await _wineCollection(familyId).doc(wineId).update({
       'name': name,
@@ -75,6 +81,8 @@ class WineRepository {
       'grape': grape,
       'year': year,
       'quantity': quantity,
+      'consumeBefore': consumeBefore != null ? Timestamp.fromDate(consumeBefore) : null,
+      'rating': rating,
     });
   }
 }
