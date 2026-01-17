@@ -37,20 +37,35 @@ class ShoppingRepository {
   /// Watch current shopping list
   Stream<List<ShoppingItem>> watchShoppingItems(String familyId) {
     return _shoppingCollection(familyId)
-        .orderBy('isChecked')
-        .orderBy('addedAt', descending: true)
         .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => ShoppingItem.fromFirestore(doc)).toList());
+        .map((snapshot) {
+          final items = snapshot.docs.map((doc) => ShoppingItem.fromFirestore(doc)).toList();
+          // Sort client-side: unchecked first, then by date
+          items.sort((a, b) {
+            if (a.isChecked != b.isChecked) {
+              return a.isChecked ? 1 : -1; // Unchecked first
+            }
+            return b.addedAt.compareTo(a.addedAt); // Newest first
+          });
+          return items;
+        });
   }
 
   /// Watch item history for autocomplete suggestions
   Stream<List<String>> watchItemHistory(String familyId) {
     return _historyCollection(familyId)
-        .orderBy('useCount', descending: true)
         .limit(100)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => doc['name'] as String).toList());
+        .map((snapshot) {
+          final docs = snapshot.docs.toList();
+          // Sort by useCount client-side
+          docs.sort((a, b) {
+            final countA = (a.data()['useCount'] as num?) ?? 0;
+            final countB = (b.data()['useCount'] as num?) ?? 0;
+            return countB.compareTo(countA);
+          });
+          return docs.map((doc) => doc['name'] as String).toList();
+        });
   }
 
   /// Add item to shopping list
@@ -171,23 +186,26 @@ class ShoppingRepository {
 
   /// Get suggestions based on query and history
   Future<List<String>> getSuggestions(String familyId, String query) async {
+    final snapshot = await _historyCollection(familyId)
+        .limit(100)
+        .get();
+
+    // Sort by useCount client-side
+    final docs = snapshot.docs.toList();
+    docs.sort((a, b) {
+      final countA = (a.data()['useCount'] as num?) ?? 0;
+      final countB = (b.data()['useCount'] as num?) ?? 0;
+      return countB.compareTo(countA);
+    });
+
     if (query.isEmpty) {
       // Return top used items
-      final snapshot = await _historyCollection(familyId)
-          .orderBy('useCount', descending: true)
-          .limit(10)
-          .get();
-      return snapshot.docs.map((doc) => doc['name'] as String).toList();
+      return docs.take(10).map((doc) => doc['name'] as String).toList();
     }
 
     // Search in history
     final normalizedQuery = query.toLowerCase();
-    final snapshot = await _historyCollection(familyId)
-        .orderBy('useCount', descending: true)
-        .limit(50)
-        .get();
-
-    return snapshot.docs
+    return docs
         .where((doc) => (doc['name'] as String).toLowerCase().contains(normalizedQuery))
         .take(10)
         .map((doc) => doc['name'] as String)
