@@ -12,7 +12,28 @@
           "package_name": "ch.zemax.miam_planning"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "468767635530-2kf431mi2edl7r9iq4lgq0o96r40odov.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "ch.zemax.miam_planning",
+            "certificate_hash": "8a60ae91bb4d867ee564e0a23c337aedbfc1ed82"
+          }
+        },
+        {
+          "client_id": "468767635530-rkn3b3dnigohmgkstch6r0nbblh1fsia.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "ch.zemax.miam_planning",
+            "certificate_hash": "52efedf08b5e67b31c0b1f74919bec97af5e03bd"
+          }
+        },
+        {
+          "client_id": "468767635530-p7l2c4g38adq6sbjurr8asc4elejpo5g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCvDVPBEMjz5p5-z37qhoU1aw6ofjPZuVs"
@@ -20,7 +41,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "468767635530-p7l2c4g38adq6sbjurr8asc4elejpo5g.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
